@@ -94,9 +94,11 @@ func (s *Source) Collect(ctx context.Context, repo model.Repository) ([]sources.
 	metrics = append(metrics, m...)
 
 	// File-based metrics: fetch git tree once, pass to all collectors.
-	tree, err := s.fetchGitTree(ctx, owner, name, branch)
-	if err != nil {
-		return nil, fmt.Errorf("fetching git tree: %w", err)
+	// If the tree can't be fetched (e.g., empty repo), use an empty tree
+	// so file-based metrics gracefully return 0.
+	tree, _ := s.fetchGitTree(ctx, owner, name, branch)
+	if tree == nil {
+		tree = &GitTree{}
 	}
 
 	m, err = s.collectDependencyCount(ctx, owner, name, branch)
