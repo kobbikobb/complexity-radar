@@ -58,17 +58,12 @@ func (s *Source) Collect(ctx context.Context, repo model.Repository) ([]sources.
 	}
 	metrics = append(metrics, m...)
 
-	m, err = s.collectBuildSuccessRatio(ctx, owner, name, branch)
+	// Fetch workflow runs once and reuse for both build metrics.
+	runs, err := s.fetchWorkflowRuns(ctx, owner, name, branch)
 	if err != nil {
-		return nil, fmt.Errorf("collecting build success ratio: %w", err)
+		return nil, fmt.Errorf("fetching workflow runs: %w", err)
 	}
-	metrics = append(metrics, m...)
-
-	m, err = s.collectBuildTime(ctx, owner, name, branch)
-	if err != nil {
-		return nil, fmt.Errorf("collecting build time: %w", err)
-	}
-	metrics = append(metrics, m...)
+	metrics = append(metrics, buildSuccessRatio(runs), buildTime(runs))
 
 	m, err = s.collectDeployFrequency(ctx, owner, name)
 	if err != nil {
@@ -124,6 +119,10 @@ func parseRepoURL(raw string) (owner, name string, err error) {
 			return parts[0], parts[1], nil
 		}
 		return "", "", fmt.Errorf("cannot parse repo URL: %s", raw)
+	}
+
+	if host != "github.com" {
+		return "", "", fmt.Errorf("unsupported host %q, only github.com is supported", host)
 	}
 
 	path := strings.TrimPrefix(u.Path, "/")

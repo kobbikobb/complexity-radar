@@ -81,9 +81,23 @@ func TestParseRepoURL(t *testing.T) {
 }
 
 func TestParseRepoURLErrors(t *testing.T) {
-	_, _, err := parseRepoURL("")
-	if err == nil {
-		t.Fatal("expected error for empty URL")
+	tests := []struct {
+		input string
+		desc  string
+	}{
+		{"", "empty string"},
+		{"git@github.com:owner", "incomplete SSH"},
+		{"githb.com/owner/repo", "wrong host"},
+		{"owner", "single segment"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			_, _, err := parseRepoURL(tt.input)
+			if err == nil {
+				t.Fatalf("expected error for %q", tt.input)
+			}
+		})
 	}
 }
 
@@ -116,16 +130,17 @@ func TestCollectSecurityVulnerabilities(t *testing.T) {
 	}
 }
 
-func TestCollectBuildSuccessRatio(t *testing.T) {
+func TestCollectBuildMetrics(t *testing.T) {
 	now := time.Now()
-	runs := map[string]interface{}{
-		"workflow_runs": []WorkflowRun{
-			{Conclusion: "success", CreatedAt: now.Add(-time.Hour).Format(time.RFC3339), UpdatedAt: now.Format(time.RFC3339), RunStartedAt: now.Add(-time.Hour).Format(time.RFC3339)},
-			{Conclusion: "success", CreatedAt: now.Add(-2 * time.Hour).Format(time.RFC3339), UpdatedAt: now.Add(-time.Hour).Format(time.RFC3339), RunStartedAt: now.Add(-2 * time.Hour).Format(time.RFC3339)},
-			{Conclusion: "failure", CreatedAt: now.Add(-3 * time.Hour).Format(time.RFC3339), UpdatedAt: now.Add(-2 * time.Hour).Format(time.RFC3339), RunStartedAt: now.Add(-3 * time.Hour).Format(time.RFC3339)},
-		},
+	runs := []WorkflowRun{
+		{Conclusion: "success", RunStartedAt: now.Add(-10 * time.Minute).Format(time.RFC3339), UpdatedAt: now.Add(-8 * time.Minute).Format(time.RFC3339)},
+		{Conclusion: "success", RunStartedAt: now.Add(-20 * time.Minute).Format(time.RFC3339), UpdatedAt: now.Add(-15 * time.Minute).Format(time.RFC3339)},
+		{Conclusion: "failure", RunStartedAt: now.Add(-30 * time.Minute).Format(time.RFC3339), UpdatedAt: now.Add(-25 * time.Minute).Format(time.RFC3339)},
 	}
-	data, _ := json.Marshal(runs)
+	resp := struct {
+		WorkflowRuns []WorkflowRun `json:"workflow_runs"`
+	}{WorkflowRuns: runs}
+	data, _ := json.Marshal(resp)
 
 	responses := defaultResponses()
 	responses["/repos/org/repo/actions/runs"] = data
@@ -139,45 +154,22 @@ func TestCollectBuildSuccessRatio(t *testing.T) {
 		t.Fatalf("Collect: %v", err)
 	}
 
-	m, ok := findMetric(metrics, model.MetricTypeBuildSuccessRatio)
+	sr, ok := findMetric(metrics, model.MetricTypeBuildSuccessRatio)
 	if !ok {
 		t.Fatal("missing build_success_ratio metric")
 	}
-	want := 2.0 / 3.0
-	if m.Value != want {
-		t.Errorf("build success ratio = %v, want %v", m.Value, want)
-	}
-}
-
-func TestCollectBuildTime(t *testing.T) {
-	now := time.Now()
-	runs := map[string]interface{}{
-		"workflow_runs": []WorkflowRun{
-			{Conclusion: "success", RunStartedAt: now.Add(-10 * time.Minute).Format(time.RFC3339), UpdatedAt: now.Add(-8 * time.Minute).Format(time.RFC3339)},
-			{Conclusion: "success", RunStartedAt: now.Add(-20 * time.Minute).Format(time.RFC3339), UpdatedAt: now.Add(-15 * time.Minute).Format(time.RFC3339)},
-		},
-	}
-	data, _ := json.Marshal(runs)
-
-	responses := defaultResponses()
-	responses["/repos/org/repo/actions/runs"] = data
-
-	client := &mockClient{responses: responses}
-	src := NewSourceWithClient(client)
-	repo := model.Repository{URL: "github.com/org/repo", Branch: "main"}
-
-	metrics, err := src.Collect(context.Background(), repo)
-	if err != nil {
-		t.Fatalf("Collect: %v", err)
+	wantRatio := 2.0 / 3.0
+	if sr.Value != wantRatio {
+		t.Errorf("build success ratio = %v, want %v", sr.Value, wantRatio)
 	}
 
-	m, ok := findMetric(metrics, model.MetricTypeBuildTime)
+	bt, ok := findMetric(metrics, model.MetricTypeBuildTime)
 	if !ok {
 		t.Fatal("missing build_time metric")
 	}
-	// avg of 2 min + 5 min = 3.5 min = 210s
-	if m.Value != 210 {
-		t.Errorf("build time = %v, want 210", m.Value)
+	// avg of 2 min + 5 min + 5 min = 4 min = 240s
+	if bt.Value != 240 {
+		t.Errorf("build time = %v, want 240", bt.Value)
 	}
 }
 
@@ -187,6 +179,7 @@ func TestCollectDeployFrequency(t *testing.T) {
 		{TagName: "v1.0.0", PublishedAt: now.Add(-2 * 24 * time.Hour).Format(time.RFC3339)},
 		{TagName: "v1.1.0", PublishedAt: now.Add(-10 * 24 * time.Hour).Format(time.RFC3339)},
 		{TagName: "v0.9.0-draft", PublishedAt: now.Add(-1 * 24 * time.Hour).Format(time.RFC3339), Draft: true},
+		{TagName: "v1.2.0-rc1", PublishedAt: now.Add(-1 * 24 * time.Hour).Format(time.RFC3339), Prerelease: true},
 	}
 	data, _ := json.Marshal(releases)
 

@@ -20,16 +20,9 @@ type WorkflowRun struct {
 	RunAttempt   int    `json:"run_attempt"`
 }
 
-func (s *Source) collectBuildSuccessRatio(ctx context.Context, owner, name, branch string) ([]sources.SourceMetric, error) {
-	runs, err := s.fetchWorkflowRuns(ctx, owner, name, branch)
-	if err != nil {
-		return nil, err
-	}
-
+func buildSuccessRatio(runs []WorkflowRun) sources.SourceMetric {
 	if len(runs) == 0 {
-		return []sources.SourceMetric{
-			{Type: model.MetricTypeBuildSuccessRatio, Value: 0},
-		}, nil
+		return sources.SourceMetric{Type: model.MetricTypeBuildSuccessRatio, Value: 0}
 	}
 
 	successes := 0
@@ -40,21 +33,12 @@ func (s *Source) collectBuildSuccessRatio(ctx context.Context, owner, name, bran
 	}
 
 	ratio := float64(successes) / float64(len(runs))
-	return []sources.SourceMetric{
-		{Type: model.MetricTypeBuildSuccessRatio, Value: ratio},
-	}, nil
+	return sources.SourceMetric{Type: model.MetricTypeBuildSuccessRatio, Value: ratio}
 }
 
-func (s *Source) collectBuildTime(ctx context.Context, owner, name, branch string) ([]sources.SourceMetric, error) {
-	runs, err := s.fetchWorkflowRuns(ctx, owner, name, branch)
-	if err != nil {
-		return nil, err
-	}
-
+func buildTime(runs []WorkflowRun) sources.SourceMetric {
 	if len(runs) == 0 {
-		return []sources.SourceMetric{
-			{Type: model.MetricTypeBuildTime, Value: 0},
-		}, nil
+		return sources.SourceMetric{Type: model.MetricTypeBuildTime, Value: 0}
 	}
 
 	var totalSeconds float64
@@ -77,9 +61,7 @@ func (s *Source) collectBuildTime(ctx context.Context, owner, name, branch strin
 		avgSeconds = totalSeconds / float64(count)
 	}
 
-	return []sources.SourceMetric{
-		{Type: model.MetricTypeBuildTime, Value: avgSeconds},
-	}, nil
+	return sources.SourceMetric{Type: model.MetricTypeBuildTime, Value: avgSeconds}
 }
 
 func (s *Source) fetchWorkflowRuns(ctx context.Context, owner, name, branch string) ([]WorkflowRun, error) {

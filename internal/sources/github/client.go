@@ -37,11 +37,18 @@ func (c *Client) GetWithParams(ctx context.Context, endpoint string, params map[
 
 func (c *Client) exec(ctx context.Context, args []string) (json.RawMessage, error) {
 	cmd := exec.CommandContext(ctx, c.executable, args...)
-	out, err := cmd.CombinedOutput()
+	out, err := cmd.Output()
 	if err != nil {
-		msg := strings.TrimSpace(string(out))
-		if msg != "" {
-			return nil, fmt.Errorf("gh api: %s: %w", msg, err)
+		// Try stderr for error messages.
+		var stderr []byte
+		if cmd.Process != nil {
+			// Process already exited; stderr is available via the error.
+			if exitErr, ok := err.(*exec.ExitError); ok {
+				stderr = exitErr.Stderr
+			}
+		}
+		if len(stderr) > 0 {
+			return nil, fmt.Errorf("gh api: %s: %w", strings.TrimSpace(string(stderr)), err)
 		}
 		return nil, fmt.Errorf("gh api: %w", err)
 	}
