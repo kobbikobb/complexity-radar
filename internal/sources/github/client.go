@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
-	"strconv"
 	"strings"
 )
 
@@ -181,11 +180,6 @@ func mergeJSONArrays(parts []json.RawMessage) (json.RawMessage, error) {
 		merged = append(merged, items...)
 	}
 	return json.Marshal(merged)
-}
-
-// maxPagesValue is a helper for tests to verify pagination params.
-func maxPagesValue() string {
-	return strconv.Itoa(10)
 }
 
 func decodeBase64(s string) (string, error) {

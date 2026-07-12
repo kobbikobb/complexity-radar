@@ -29,17 +29,17 @@ func New(dbPath string) (*Store, error) {
 	}
 
 	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("enabling foreign keys: %w", err)
 	}
 
 	s := &Store{db: db}
 	if err := s.migrate(); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("running migrations: %w", err)
 	}
 	if err := s.EnsureMetricTypes(); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("seeding metric types: %w", err)
 	}
 
@@ -146,7 +146,7 @@ func (s *Store) ListProjects() ([]model.Project, error) {
 	if err != nil {
 		return nil, fmt.Errorf("querying projects: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var projects []model.Project
 	for rows.Next() {
@@ -255,7 +255,7 @@ func (s *Store) ListRepositories(projectID int64) ([]model.Repository, error) {
 	if err != nil {
 		return nil, fmt.Errorf("querying repositories: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var repos []model.Repository
 	for rows.Next() {
@@ -348,7 +348,7 @@ func (s *Store) GetMetricsByRepository(repoID int64) ([]model.Metric, error) {
 	if err != nil {
 		return nil, fmt.Errorf("querying metrics: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var metrics []model.Metric
 	for rows.Next() {
@@ -395,7 +395,7 @@ func (s *Store) GetDimensionScoresByRepository(repoID int64) ([]model.DimensionS
 	if err != nil {
 		return nil, fmt.Errorf("querying dimension scores: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var scores []model.DimensionScore
 	for rows.Next() {
@@ -481,7 +481,7 @@ func (s *Store) GetProjectReportScores(reportID int64) ([]model.ProjectReportSco
 	if err != nil {
 		return nil, fmt.Errorf("querying project report scores: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var scores []model.ProjectReportScore
 	for rows.Next() {
