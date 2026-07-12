@@ -1,17 +1,14 @@
 package github
 
 import (
-	"context"
-	"encoding/json"
-	"fmt"
 	"strings"
 
 	"github.com/kobbikobb/complexity-radar/internal/model"
 	"github.com/kobbikobb/complexity-radar/internal/sources"
 )
 
-// k8sManifestPaths lists paths to check for Kubernetes manifests.
-var k8sManifestPaths = []string{
+// k8sManifestPrefixes lists path prefixes to check for Kubernetes manifests.
+var k8sManifestPrefixes = []string{
 	"k8s/",
 	"kubernetes/",
 	"deploy/",
@@ -20,40 +17,28 @@ var k8sManifestPaths = []string{
 	"helm/",
 }
 
-func (s *Source) collectK8sDeployments(ctx context.Context, owner, name, branch string) ([]sources.SourceMetric, error) {
+func collectK8sDeployments(tree *GitTree) []sources.SourceMetric {
 	count := 0
-
-	for _, prefix := range k8sManifestPaths {
-		// Try to list files in the directory using the git tree API
-		endpoint := fmt.Sprintf("/repos/%s/%s/git/trees/%s", owner, name, branch)
-		data, err := s.client.GetWithParams(ctx, endpoint, map[string]string{"recursive": "1"})
-		if err != nil {
-			continue
+	for _, entry := range tree.Tree {
+		if isK8sManifestDir(entry.Path) && isK8sManifestFile(entry.Path) {
+			count++
 		}
-
-		var tree struct {
-			Tree []struct {
-				Path string `json:"path"`
-			} `json:"tree"`
-		}
-		if err := json.Unmarshal(data, &tree); err != nil {
-			continue
-		}
-
-		for _, item := range tree.Tree {
-			if strings.HasPrefix(item.Path, prefix) && isK8sManifest(item.Path) {
-				count++
-			}
-		}
-		break // Only check first matching prefix
 	}
-
 	return []sources.SourceMetric{
 		{Type: model.MetricTypeK8sDeployments, Value: float64(count)},
-	}, nil
+	}
 }
 
-func isK8sManifest(path string) bool {
+func isK8sManifestDir(path string) bool {
+	for _, prefix := range k8sManifestPrefixes {
+		if strings.HasPrefix(path, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+func isK8sManifestFile(path string) bool {
 	extensions := []string{".yaml", ".yml", ".json"}
 	for _, ext := range extensions {
 		if strings.HasSuffix(path, ext) {

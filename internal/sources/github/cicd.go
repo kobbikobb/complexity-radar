@@ -2,28 +2,20 @@ package github
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"strings"
 
 	"github.com/kobbikobb/complexity-radar/internal/model"
 	"github.com/kobbikobb/complexity-radar/internal/sources"
 )
 
-func (s *Source) collectCICDComplexity(ctx context.Context, owner, name, branch string) ([]sources.SourceMetric, error) {
+func collectCICDComplexity(ctx context.Context, client APIClient, owner, name, branch string, tree *GitTree) []sources.SourceMetric {
 	score := 0.0
 
-	// Check GitHub Actions workflows
-	workflowScore, err := s.scoreGitHubActions(ctx, owner, name, branch)
-	if err == nil {
-		score += workflowScore
-	}
+	// Score GitHub Actions workflows
+	score += scoreGitHubActions(ctx, client, owner, name, branch, tree)
 
-	// Check for other CI systems
-	ciScore, err := s.scoreOtherCISystems(ctx, owner, name, branch)
-	if err == nil {
-		score += ciScore
-	}
+	// Score other CI systems
+	score += scoreOtherCISystems(ctx, client, owner, name, branch)
 
 	// Cap at 100
 	if score > 100 {
@@ -32,32 +24,18 @@ func (s *Source) collectCICDComplexity(ctx context.Context, owner, name, branch 
 
 	return []sources.SourceMetric{
 		{Type: model.MetricTypeCICDComplexity, Value: score},
-	}, nil
+	}
 }
 
-func (s *Source) scoreGitHubActions(ctx context.Context, owner, name, branch string) (float64, error) {
-	endpoint := fmt.Sprintf("/repos/%s/%s/git/trees/%s", owner, name, branch)
-	data, err := s.client.GetWithParams(ctx, endpoint, map[string]string{"recursive": "1"})
-	if err != nil {
-		return 0, err
-	}
-
-	var tree struct {
-		Tree []struct {
-			Path string `json:"path"`
-		} `json:"tree"`
-	}
-	if err := json.Unmarshal(data, &tree); err != nil {
-		return 0, err
-	}
-
+func scoreGitHubActions(ctx context.Context, client APIClient, owner, name, branch string, tree *GitTree) float64 {
 	score := 0.0
 	workflowCount := 0
 
-	for _, item := range tree.Tree {
-		if strings.HasPrefix(item.Path, ".github/workflows/") && (strings.HasSuffix(item.Path, ".yml") || strings.HasSuffix(item.Path, ".yaml")) {
+	for _, entry := range tree.Tree {
+		if strings.HasPrefix(entry.Path, ".github/workflows/") &&
+			(strings.HasSuffix(entry.Path, ".yml") || strings.HasSuffix(entry.Path, ".yaml")) {
 			workflowCount++
-			content, err := s.client.GetFileContent(ctx, owner, name, item.Path, branch)
+			content, err := client.GetFileContent(ctx, owner, name, entry.Path, branch)
 			if err != nil {
 				continue
 			}
@@ -70,56 +48,39 @@ func (s *Source) scoreGitHubActions(ctx context.Context, owner, name, branch str
 		score += float64(workflowCount-3) * 5
 	}
 
-	return score, nil
+	return score
 }
 
 func scoreWorkflow(content string) float64 {
 	score := 0.0
-	lines := strings.Split(content, "\n")
 
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
+	// Count jobs (each job adds complexity)
+	score += float64(strings.Count(content, "jobs:")) * 10
 
-		// Count jobs
-		if strings.HasPrefix(line, "jobs:") {
-			score += 10
-		}
+	// Count steps (each step adds complexity)
+	score += float64(strings.Count(content, "- uses:")) * 2
+	score += float64(strings.Count(content, "- name:")) * 2
 
-		// Count steps
-		if strings.HasPrefix(line, "- uses:") || strings.HasPrefix(line, "- name:") {
-			score += 2
-		}
+	// Count conditional logic
+	score += float64(strings.Count(content, "if:")) * 3
 
-		// Count conditional logic
-		if strings.Contains(line, "if:") {
-			score += 3
-		}
+	// Count matrix strategies
+	score += float64(strings.Count(content, "matrix:")) * 5
 
-		// Count matrix strategies
-		if strings.Contains(line, "matrix:") {
-			score += 5
-		}
+	// Count reusable workflows
+	score += float64(strings.Count(content, ".github/workflows/")) * 8
 
-		// Count reusable workflows
-		if strings.Contains(line, "uses:") && strings.Contains(line, ".github/workflows/") {
-			score += 8
-		}
+	// Count secrets usage
+	score += float64(strings.Count(content, "secrets.")) * 2
+	score += float64(strings.Count(content, "secrets:")) * 2
 
-		// Count secrets usage
-		if strings.Contains(line, "secrets.") {
-			score += 2
-		}
-
-		// Count environment variables
-		if strings.HasPrefix(line, "env:") {
-			score += 1
-		}
-	}
+	// Count environment variables
+	score += float64(strings.Count(content, "env:")) * 1
 
 	return score
 }
 
-func (s *Source) scoreOtherCISystems(ctx context.Context, owner, name, branch string) (float64, error) {
+func scoreOtherCISystems(ctx context.Context, client APIClient, owner, name, branch string) float64 {
 	ciFiles := []string{
 		".travis.yml",
 		".circleci/config.yml",
@@ -132,11 +93,11 @@ func (s *Source) scoreOtherCISystems(ctx context.Context, owner, name, branch st
 
 	score := 0.0
 	for _, file := range ciFiles {
-		_, err := s.client.GetFileContent(ctx, owner, name, file, branch)
+		_, err := client.GetFileContent(ctx, owner, name, file, branch)
 		if err == nil {
-			score += 15 // Each CI system adds complexity
+			score += 15
 		}
 	}
 
-	return score, nil
+	return score
 }

@@ -73,6 +73,21 @@ func defaultResponses() map[string]json.RawMessage {
 	}
 }
 
+// makeTreeJSON creates a JSON git tree response for the given paths.
+func makeTreeJSON(paths []string) json.RawMessage {
+	type entry struct {
+		Path string `json:"path"`
+	}
+	var tree []entry
+	for _, p := range paths {
+		tree = append(tree, entry{Path: p})
+	}
+	data, _ := json.Marshal(struct {
+		Tree []entry `json:"tree"`
+	}{Tree: tree})
+	return data
+}
+
 func TestParseRepoURL(t *testing.T) {
 	tests := []struct {
 		input string
@@ -129,6 +144,7 @@ func TestCollectSecurityVulnerabilities(t *testing.T) {
 
 	responses := defaultResponses()
 	responses["/repos/org/repo/dependabot/alerts"] = data
+	responses["/repos/org/repo/git/trees/main"] = makeTreeJSON(nil)
 
 	client := &mockClient{responses: responses}
 	src := NewSourceWithClient(client)
@@ -162,6 +178,7 @@ func TestCollectBuildMetrics(t *testing.T) {
 
 	responses := defaultResponses()
 	responses["/repos/org/repo/actions/runs"] = data
+	responses["/repos/org/repo/git/trees/main"] = makeTreeJSON(nil)
 
 	client := &mockClient{responses: responses}
 	src := NewSourceWithClient(client)
@@ -203,6 +220,7 @@ func TestCollectDeployFrequency(t *testing.T) {
 
 	responses := defaultResponses()
 	responses["/repos/org/repo/releases"] = data
+	responses["/repos/org/repo/git/trees/main"] = makeTreeJSON(nil)
 
 	client := &mockClient{responses: responses}
 	src := NewSourceWithClient(client)
@@ -233,6 +251,7 @@ func TestCollectStalePRs(t *testing.T) {
 
 	responses := defaultResponses()
 	responses["/repos/org/repo/pulls"] = data
+	responses["/repos/org/repo/git/trees/main"] = makeTreeJSON(nil)
 
 	client := &mockClient{responses: responses}
 	src := NewSourceWithClient(client)
@@ -255,6 +274,7 @@ func TestCollectStalePRs(t *testing.T) {
 func TestCollectEmptyWorkflowRuns(t *testing.T) {
 	responses := defaultResponses()
 	responses["/repos/org/repo/actions/runs"] = []byte(`{"workflow_runs": []}`)
+	responses["/repos/org/repo/git/trees/main"] = makeTreeJSON(nil)
 
 	client := &mockClient{responses: responses}
 	src := NewSourceWithClient(client)
@@ -312,6 +332,7 @@ func TestCollectDependencyCount(t *testing.T) {
 		responses:    defaultResponses(),
 		fileContents: map[string]string{"package.json": packageJSON},
 	}
+	client.responses["/repos/org/repo/git/trees/main"] = makeTreeJSON(nil)
 
 	src := NewSourceWithClient(client)
 	repo := model.Repository{URL: "github.com/org/repo", Branch: "main"}
@@ -344,6 +365,7 @@ require (
 		responses:    defaultResponses(),
 		fileContents: map[string]string{"go.mod": goMod},
 	}
+	client.responses["/repos/org/repo/git/trees/main"] = makeTreeJSON(nil)
 
 	src := NewSourceWithClient(client)
 	repo := model.Repository{URL: "github.com/org/repo", Branch: "main"}
@@ -367,19 +389,8 @@ func TestCollectContainerImages(t *testing.T) {
 COPY . /usr/share/nginx/html
 FROM node:18-alpine AS builder`
 
-	treeData := []struct {
-		Path string `json:"path"`
-	}{
-		{Path: "Dockerfile"},
-	}
-	treeJSON, _ := json.Marshal(struct {
-		Tree []struct {
-			Path string `json:"path"`
-		} `json:"tree"`
-	}{Tree: treeData})
-
 	responses := defaultResponses()
-	responses["/repos/org/repo/git/trees/main"] = treeJSON
+	responses["/repos/org/repo/git/trees/main"] = makeTreeJSON([]string{"Dockerfile"})
 
 	client := &mockClient{
 		responses:    responses,
@@ -403,6 +414,35 @@ FROM node:18-alpine AS builder`
 	}
 }
 
+func TestCollectContainerImagesNoTag(t *testing.T) {
+	dockerfile := `FROM scratch
+COPY binary /app`
+
+	responses := defaultResponses()
+	responses["/repos/org/repo/git/trees/main"] = makeTreeJSON([]string{"Dockerfile"})
+
+	client := &mockClient{
+		responses:    responses,
+		fileContents: map[string]string{"Dockerfile": dockerfile},
+	}
+
+	src := NewSourceWithClient(client)
+	repo := model.Repository{URL: "github.com/org/repo", Branch: "main"}
+
+	metrics, err := src.Collect(context.Background(), repo)
+	if err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	m, ok := findMetric(metrics, model.MetricTypeContainerImages)
+	if !ok {
+		t.Fatal("missing container_images metric")
+	}
+	if m.Value != 1 {
+		t.Errorf("container images = %v, want 1 (FROM scratch should count)", m.Value)
+	}
+}
+
 func TestCollectCICDComplexity(t *testing.T) {
 	workflow := `name: CI
 on: push
@@ -418,19 +458,8 @@ jobs:
         uses: ./.github/workflows/deploy.yml
         secrets: inherit`
 
-	treeData := []struct {
-		Path string `json:"path"`
-	}{
-		{Path: ".github/workflows/ci.yml"},
-	}
-	treeJSON, _ := json.Marshal(struct {
-		Tree []struct {
-			Path string `json:"path"`
-		} `json:"tree"`
-	}{Tree: treeData})
-
 	responses := defaultResponses()
-	responses["/repos/org/repo/git/trees/main"] = treeJSON
+	responses["/repos/org/repo/git/trees/main"] = makeTreeJSON([]string{".github/workflows/ci.yml"})
 
 	client := &mockClient{
 		responses:    responses,
@@ -449,8 +478,159 @@ jobs:
 	if !ok {
 		t.Fatal("missing ci_cd_complexity metric")
 	}
-	// Should have non-zero complexity score
-	if m.Value <= 0 {
-		t.Errorf("CI/CD complexity = %v, want > 0", m.Value)
+	// jobs(10) + uses(2) + name(2) + if(3) + workflows(8) + secrets(2) = 27
+	if m.Value != 27 {
+		t.Errorf("CI/CD complexity = %v, want 27", m.Value)
+	}
+}
+
+func TestCollectDeployTargets(t *testing.T) {
+	workflow := `name: CI
+on: push
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production`
+
+	responses := defaultResponses()
+	responses["/repos/org/repo/git/trees/main"] = makeTreeJSON([]string{".github/workflows/ci.yml"})
+
+	client := &mockClient{
+		responses:    responses,
+		fileContents: map[string]string{".github/workflows/ci.yml": workflow},
+	}
+
+	src := NewSourceWithClient(client)
+	repo := model.Repository{URL: "github.com/org/repo", Branch: "main"}
+
+	metrics, err := src.Collect(context.Background(), repo)
+	if err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	m, ok := findMetric(metrics, model.MetricTypeDeployTargets)
+	if !ok {
+		t.Fatal("missing deploy_targets metric")
+	}
+	if m.Value != 1 {
+		t.Errorf("deploy targets = %v, want 1", m.Value)
+	}
+}
+
+func TestCollectK8sDeployments(t *testing.T) {
+	responses := defaultResponses()
+	responses["/repos/org/repo/git/trees/main"] = makeTreeJSON([]string{
+		"k8s/deployment.yaml",
+		"k8s/service.yaml",
+		"k8s/ingress.yml",
+		"src/main.go",
+	})
+
+	client := &mockClient{responses: responses}
+
+	src := NewSourceWithClient(client)
+	repo := model.Repository{URL: "github.com/org/repo", Branch: "main"}
+
+	metrics, err := src.Collect(context.Background(), repo)
+	if err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	m, ok := findMetric(metrics, model.MetricTypeK8sDeployments)
+	if !ok {
+		t.Fatal("missing k8s_deployments metric")
+	}
+	if m.Value != 3 {
+		t.Errorf("k8s deployments = %v, want 3", m.Value)
+	}
+}
+
+func TestParsePackageJSON(t *testing.T) {
+	content := `{"dependencies": {"a": "1", "b": "2"}, "devDependencies": {"c": "3"}}`
+	count, err := parsePackageJSON(content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 3 {
+		t.Errorf("count = %v, want 3", count)
+	}
+}
+
+func TestParseGoMod(t *testing.T) {
+	content := `require (
+	github.com/foo v1.0.0
+	github.com/bar v2.0.0
+)`
+	count, err := parseGoMod(content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 2 {
+		t.Errorf("count = %v, want 2", count)
+	}
+}
+
+func TestParsePomXML(t *testing.T) {
+	content := `<project>
+<dependencies>
+<dependency><groupId>a</groupId></dependency>
+<dependency><groupId>b</groupId></dependency>
+</dependencies>
+</project>`
+	count, err := parsePomXML(content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 2 {
+		t.Errorf("count = %v, want 2", count)
+	}
+}
+
+func TestParseRequirementsTxt(t *testing.T) {
+	content := `flask==2.0
+requests>=2.25
+# comment
+-r base.txt`
+	count, err := parseRequirementsTxt(content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 3 {
+		t.Errorf("count = %v, want 3", count)
+	}
+}
+
+func TestParseCargoToml(t *testing.T) {
+	content := `[dependencies]
+serde = "1.0"
+tokio = { version = "1.0", features = ["full"] }
+
+[dev-dependencies]
+assert_cmd = "2.0"
+
+[build-dependencies]
+cc = "1.0"`
+	count, err := parseCargoToml(content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 3 {
+		t.Errorf("count = %v, want 3 (serde, tokio, assert_cmd)", count)
+	}
+}
+
+func TestParseGemfile(t *testing.T) {
+	content := `source 'https://rubygems.org'
+gem 'rails', '~> 7.0'
+gem 'puma', '~> 5.0'
+group :test do
+  gem 'rspec', '~> 3.0'
+end`
+	count, err := parseGemfile(content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 3 {
+		t.Errorf("count = %v, want 3", count)
 	}
 }

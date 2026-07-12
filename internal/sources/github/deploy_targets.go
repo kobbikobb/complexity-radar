@@ -2,47 +2,31 @@ package github
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"strings"
 
 	"github.com/kobbikobb/complexity-radar/internal/model"
 	"github.com/kobbikobb/complexity-radar/internal/sources"
 )
 
-func (s *Source) collectDeployTargets(ctx context.Context, owner, name, branch string) ([]sources.SourceMetric, error) {
+func collectDeployTargets(ctx context.Context, client APIClient, owner, name, branch string, tree *GitTree) []sources.SourceMetric {
 	targets := make(map[string]bool)
 
 	// Check GitHub Actions workflows
-	s.collectTargetsFromWorkflows(ctx, owner, name, branch, targets)
+	collectTargetsFromWorkflows(ctx, client, owner, name, branch, tree, targets)
 
 	// Check common deploy config files
-	s.collectTargetsFromDeployConfigs(ctx, owner, name, branch, targets)
+	collectTargetsFromDeployConfigs(ctx, client, owner, name, branch, targets)
 
 	return []sources.SourceMetric{
 		{Type: model.MetricTypeDeployTargets, Value: float64(len(targets))},
-	}, nil
+	}
 }
 
-func (s *Source) collectTargetsFromWorkflows(ctx context.Context, owner, name, branch string, targets map[string]bool) {
-	endpoint := fmt.Sprintf("/repos/%s/%s/git/trees/%s", owner, name, branch)
-	data, err := s.client.GetWithParams(ctx, endpoint, map[string]string{"recursive": "1"})
-	if err != nil {
-		return
-	}
-
-	var tree struct {
-		Tree []struct {
-			Path string `json:"path"`
-		} `json:"tree"`
-	}
-	if err := json.Unmarshal(data, &tree); err != nil {
-		return
-	}
-
-	for _, item := range tree.Tree {
-		if strings.HasPrefix(item.Path, ".github/workflows/") && strings.HasSuffix(item.Path, ".yml") {
-			content, err := s.client.GetFileContent(ctx, owner, name, item.Path, branch)
+func collectTargetsFromWorkflows(ctx context.Context, client APIClient, owner, name, branch string, tree *GitTree, targets map[string]bool) {
+	for _, entry := range tree.Tree {
+		if strings.HasPrefix(entry.Path, ".github/workflows/") &&
+			(strings.HasSuffix(entry.Path, ".yml") || strings.HasSuffix(entry.Path, ".yaml")) {
+			content, err := client.GetFileContent(ctx, owner, name, entry.Path, branch)
 			if err != nil {
 				continue
 			}
@@ -51,7 +35,7 @@ func (s *Source) collectTargetsFromWorkflows(ctx context.Context, owner, name, b
 	}
 }
 
-func (s *Source) collectTargetsFromDeployConfigs(ctx context.Context, owner, name, branch string, targets map[string]bool) {
+func collectTargetsFromDeployConfigs(ctx context.Context, client APIClient, owner, name, branch string, targets map[string]bool) {
 	configFiles := []string{
 		"appspec.json",
 		"appspec.yml",
@@ -60,12 +44,12 @@ func (s *Source) collectTargetsFromDeployConfigs(ctx context.Context, owner, nam
 	}
 
 	for _, file := range configFiles {
-		content, err := s.client.GetFileContent(ctx, owner, name, file, branch)
+		content, err := client.GetFileContent(ctx, owner, name, file, branch)
 		if err != nil {
 			continue
 		}
-		// Extract environment names from deploy configs
-		if strings.Contains(content, "environment") {
+		// Only count files that look like actual deploy configs
+		if strings.Contains(content, "environment") || strings.Contains(content, "deploy") {
 			targets[file] = true
 		}
 	}
@@ -76,7 +60,7 @@ func parseWorkflowEnvironments(content string, targets map[string]bool) {
 	lines := strings.Split(content, "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		// Look for environment: lines
+		// Look for environment: lines (e.g., "environment: production")
 		if strings.HasPrefix(line, "environment:") {
 			parts := strings.SplitN(line, ":", 2)
 			if len(parts) == 2 {
@@ -86,10 +70,6 @@ func parseWorkflowEnvironments(content string, targets map[string]bool) {
 					targets[env] = true
 				}
 			}
-		}
-		// Look for deploy section
-		if strings.HasPrefix(line, "deploy:") {
-			targets["deploy"] = true
 		}
 	}
 }

@@ -72,7 +72,7 @@ func parseGoMod(content string) (float64, error) {
 			count++
 		}
 		// Single-line require: require github.com/foo/bar v1.0.0
-		if strings.HasPrefix(line, "require ") && !strings.HasSuffix(line, "(") {
+		if !inRequire && strings.HasPrefix(line, "require ") && !strings.HasSuffix(line, "(") {
 			count++
 		}
 	}
@@ -80,14 +80,10 @@ func parseGoMod(content string) (float64, error) {
 }
 
 func parsePomXML(content string) (float64, error) {
-	count := 0
-	// Simple XML parsing: count <dependency> elements
-	decoder := strings.NewReader(content)
-	buf := make([]byte, len(content))
-	_, _ = decoder.Read(buf)
-
-	contentStr := string(buf)
-	count = strings.Count(contentStr, "<dependency>")
+	// Simple count of <dependency> elements.
+	// Note: This counts occurrences in the raw XML, which may include
+	// comments or CDATA sections. For accurate parsing, use a proper XML parser.
+	count := strings.Count(content, "<dependency>")
 	return float64(count), nil
 }
 
@@ -95,7 +91,12 @@ func parseRequirementsTxt(content string) (float64, error) {
 	count := 0
 	for _, line := range strings.Split(content, "\n") {
 		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "-") {
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		// Count -r includes as dependencies
+		if strings.HasPrefix(line, "-r ") || strings.HasPrefix(line, "-e ") {
+			count++
 			continue
 		}
 		count++
@@ -110,7 +111,6 @@ func parseCargoToml(content string) (float64, error) {
 		line = strings.TrimSpace(line)
 		if line == "[dependencies]" || line == "[dev-dependencies]" {
 			inDeps = true
-			count++ // Count the section header as a marker
 			continue
 		}
 		if strings.HasPrefix(line, "[") && inDeps {
