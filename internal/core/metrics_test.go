@@ -144,18 +144,18 @@ func TestProjectReportMetricsByDimension(t *testing.T) {
 func TestReportProjectByName(t *testing.T) {
 	report := Report{
 		Projects: []ProjectReport{
-			{Repository: Repository{URL: "github.com/user/alpha", Branch: "main"}, Score: 1.0},
-			{Repository: Repository{URL: "github.com/user/beta", Branch: "develop"}, Score: 2.0},
+			{Name: "alpha", Repository: Repository{URL: "github.com/user/alpha", Branch: "main"}, Score: 1.0},
+			{Name: "beta", Repository: Repository{URL: "github.com/user/beta", Branch: "develop"}, Score: 2.0},
 		},
 	}
 
 	t.Run("existing project", func(t *testing.T) {
-		p, ok := report.ProjectByName("github.com/user/alpha")
+		p, ok := report.ProjectByName("alpha")
 		if !ok {
 			t.Fatal("ProjectByName() returned false for existing project")
 		}
-		if p.Repository.URL != "github.com/user/alpha" {
-			t.Errorf("got URL %q, want %q", p.Repository.URL, "github.com/user/alpha")
+		if p.Name != "alpha" {
+			t.Errorf("got Name %q, want %q", p.Name, "alpha")
 		}
 		if p.Score != 1.0 {
 			t.Errorf("got Score %v, want 1.0", p.Score)
@@ -163,7 +163,7 @@ func TestReportProjectByName(t *testing.T) {
 	})
 
 	t.Run("non-existent project", func(t *testing.T) {
-		p, ok := report.ProjectByName("github.com/user/gamma")
+		p, ok := report.ProjectByName("gamma")
 		if ok {
 			t.Fatal("ProjectByName() returned true for non-existent project")
 		}
@@ -187,6 +187,59 @@ func TestReportProjectByName(t *testing.T) {
 		p, ok := empty.ProjectByName("anything")
 		if ok {
 			t.Fatal("ProjectByName() returned true for empty report")
+		}
+		if p != nil {
+			t.Errorf("expected nil, got %v", p)
+		}
+	})
+}
+
+func TestReportProjectByURL(t *testing.T) {
+	report := Report{
+		Projects: []ProjectReport{
+			{Name: "alpha", Repository: Repository{URL: "github.com/user/alpha", Branch: "main"}, Score: 1.0},
+			{Name: "beta", Repository: Repository{URL: "github.com/user/beta", Branch: "develop"}, Score: 2.0},
+		},
+	}
+
+	t.Run("existing project", func(t *testing.T) {
+		p, ok := report.ProjectByURL("github.com/user/alpha")
+		if !ok {
+			t.Fatal("ProjectByURL() returned false for existing project")
+		}
+		if p.Repository.URL != "github.com/user/alpha" {
+			t.Errorf("got URL %q, want %q", p.Repository.URL, "github.com/user/alpha")
+		}
+		if p.Score != 1.0 {
+			t.Errorf("got Score %v, want 1.0", p.Score)
+		}
+	})
+
+	t.Run("non-existent project", func(t *testing.T) {
+		p, ok := report.ProjectByURL("github.com/user/gamma")
+		if ok {
+			t.Fatal("ProjectByURL() returned true for non-existent project")
+		}
+		if p != nil {
+			t.Errorf("expected nil, got %v", p)
+		}
+	})
+
+	t.Run("empty URL", func(t *testing.T) {
+		p, ok := report.ProjectByURL("")
+		if ok {
+			t.Fatal("ProjectByURL() returned true for empty URL")
+		}
+		if p != nil {
+			t.Errorf("expected nil, got %v", p)
+		}
+	})
+
+	t.Run("empty projects list", func(t *testing.T) {
+		empty := Report{}
+		p, ok := empty.ProjectByURL("github.com/user/alpha")
+		if ok {
+			t.Fatal("ProjectByURL() returned true for empty report")
 		}
 		if p != nil {
 			t.Errorf("expected nil, got %v", p)

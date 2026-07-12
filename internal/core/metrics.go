@@ -59,11 +59,22 @@ type Report struct {
 	Projects []ProjectReport `json:"projects"`
 }
 
-// ProjectByName looks up a project report by its repository name.
+// ProjectByName looks up a project report by its name.
 // Returns the report and true when found, or nil and false otherwise.
 func (r Report) ProjectByName(name string) (*ProjectReport, bool) {
 	for i := range r.Projects {
-		if r.Projects[i].Repository.URL == name {
+		if r.Projects[i].Name == name {
+			return &r.Projects[i], true
+		}
+	}
+	return nil, false
+}
+
+// ProjectByURL looks up a project report by its repository URL.
+// Returns the report and true when found, or nil and false otherwise.
+func (r Report) ProjectByURL(url string) (*ProjectReport, bool) {
+	for i := range r.Projects {
+		if r.Projects[i].Repository.URL == url {
 			return &r.Projects[i], true
 		}
 	}
@@ -72,6 +83,7 @@ func (r Report) ProjectByName(name string) (*ProjectReport, bool) {
 
 // ProjectReport contains the metrics and computed scores for a single repository.
 type ProjectReport struct {
+	Name            string           `json:"name"`
 	Repository      Repository       `json:"repository"`
 	Metrics         []Metric         `json:"metrics"`
 	DimensionScores []DimensionScore `json:"dimension_scores"`
