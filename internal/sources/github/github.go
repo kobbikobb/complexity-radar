@@ -36,6 +36,11 @@ func (s *Source) SupportedMetrics() []model.MetricTypeName {
 		model.MetricTypeBuildTime,
 		model.MetricTypeDeployFrequency,
 		model.MetricTypeStalePRs,
+		model.MetricTypeDependencyCount,
+		model.MetricTypeK8sDeployments,
+		model.MetricTypeContainerImages,
+		model.MetricTypeDeployTargets,
+		model.MetricTypeCICDComplexity,
 	}
 }
 
@@ -74,6 +79,37 @@ func (s *Source) Collect(ctx context.Context, repo model.Repository) ([]sources.
 	m, err = s.collectStalePRs(ctx, owner, name)
 	if err != nil {
 		return nil, fmt.Errorf("collecting stale PRs: %w", err)
+	}
+	metrics = append(metrics, m...)
+
+	// File-based metrics
+	m, err = s.collectDependencyCount(ctx, owner, name, branch)
+	if err != nil {
+		return nil, fmt.Errorf("collecting dependency count: %w", err)
+	}
+	metrics = append(metrics, m...)
+
+	m, err = s.collectK8sDeployments(ctx, owner, name, branch)
+	if err != nil {
+		return nil, fmt.Errorf("collecting k8s deployments: %w", err)
+	}
+	metrics = append(metrics, m...)
+
+	m, err = s.collectContainerImages(ctx, owner, name, branch)
+	if err != nil {
+		return nil, fmt.Errorf("collecting container images: %w", err)
+	}
+	metrics = append(metrics, m...)
+
+	m, err = s.collectDeployTargets(ctx, owner, name, branch)
+	if err != nil {
+		return nil, fmt.Errorf("collecting deploy targets: %w", err)
+	}
+	metrics = append(metrics, m...)
+
+	m, err = s.collectCICDComplexity(ctx, owner, name, branch)
+	if err != nil {
+		return nil, fmt.Errorf("collecting CI/CD complexity: %w", err)
 	}
 	metrics = append(metrics, m...)
 
