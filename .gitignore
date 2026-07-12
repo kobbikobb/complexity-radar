@@ -33,4 +33,5 @@ Thumbs.db
 *.db
 *.db-journal
 complexity-radar.toml
-radar
+/radar
+dist/
