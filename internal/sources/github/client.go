@@ -2,10 +2,10 @@ package github
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os/exec"
-	"strconv"
 	"strings"
 )
 
@@ -65,6 +65,42 @@ func (c *Client) GetPaginated(ctx context.Context, endpoint string, params map[s
 	}
 
 	return combined, nil
+}
+
+// GetFileContent fetches a file's decoded content from the repo.
+func (c *Client) GetFileContent(ctx context.Context, owner, repo, path, ref string) (string, error) {
+	endpoint := fmt.Sprintf("/repos/%s/%s/contents/%s", owner, repo, path)
+	params := map[string]string{}
+	if ref != "" {
+		params["ref"] = ref
+	}
+	data, err := c.GetWithParams(ctx, endpoint, params)
+	if err != nil {
+		return "", err
+	}
+
+	var file struct {
+		Content  string `json:"content"`
+		Encoding string `json:"encoding"`
+		Message  string `json:"message"`
+	}
+	if err := json.Unmarshal(data, &file); err != nil {
+		return "", fmt.Errorf("parsing file content response: %w", err)
+	}
+
+	if file.Message != "" {
+		return "", fmt.Errorf("file %s: %s", path, file.Message)
+	}
+
+	if file.Encoding == "base64" {
+		decoded, err := decodeBase64(file.Content)
+		if err != nil {
+			return "", fmt.Errorf("decoding file %s: %w", path, err)
+		}
+		return decoded, nil
+	}
+
+	return file.Content, nil
 }
 
 func (c *Client) exec(ctx context.Context, args []string) (json.RawMessage, error) {
@@ -146,7 +182,12 @@ func mergeJSONArrays(parts []json.RawMessage) (json.RawMessage, error) {
 	return json.Marshal(merged)
 }
 
-// maxPagesValue is a helper for tests to verify pagination params.
-func maxPagesValue() string {
-	return strconv.Itoa(10)
+func decodeBase64(s string) (string, error) {
+	// GitHub API returns base64 with newlines in the content.
+	s = strings.ReplaceAll(s, "\n", "")
+	data, err := base64.StdEncoding.DecodeString(s)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
 }

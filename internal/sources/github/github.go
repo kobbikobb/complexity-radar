@@ -2,6 +2,7 @@ package github
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"strings"
@@ -9,6 +10,16 @@ import (
 	"github.com/kobbikobb/complexity-radar/internal/model"
 	"github.com/kobbikobb/complexity-radar/internal/sources"
 )
+
+// GitTree represents a GitHub git tree response.
+type GitTree struct {
+	Tree []GitTreeEntry `json:"tree"`
+}
+
+// GitTreeEntry represents a single entry in a git tree.
+type GitTreeEntry struct {
+	Path string `json:"path"`
+}
 
 // Source collects metrics from GitHub via the gh CLI.
 type Source struct {
@@ -36,6 +47,11 @@ func (s *Source) SupportedMetrics() []model.MetricTypeName {
 		model.MetricTypeBuildTime,
 		model.MetricTypeDeployFrequency,
 		model.MetricTypeStalePRs,
+		model.MetricTypeDependencyCount,
+		model.MetricTypeK8sDeployments,
+		model.MetricTypeContainerImages,
+		model.MetricTypeDeployTargets,
+		model.MetricTypeCICDComplexity,
 	}
 }
 
@@ -77,7 +93,41 @@ func (s *Source) Collect(ctx context.Context, repo model.Repository) ([]sources.
 	}
 	metrics = append(metrics, m...)
 
+	// File-based metrics: fetch git tree once, pass to all collectors.
+	// If the tree can't be fetched (e.g., empty repo), use an empty tree
+	// so file-based metrics gracefully return 0.
+	tree, _ := s.fetchGitTree(ctx, owner, name, branch)
+	if tree == nil {
+		tree = &GitTree{}
+	}
+
+	m, err = s.collectDependencyCount(ctx, owner, name, branch)
+	if err != nil {
+		return nil, fmt.Errorf("collecting dependency count: %w", err)
+	}
+	metrics = append(metrics, m...)
+
+	metrics = append(metrics, collectK8sDeployments(tree)...)
+	metrics = append(metrics, collectContainerImages(ctx, s.client, owner, name, branch, tree)...)
+	metrics = append(metrics, collectDeployTargets(ctx, s.client, owner, name, branch, tree)...)
+	metrics = append(metrics, collectCICDComplexity(ctx, s.client, owner, name, branch, tree)...)
+
 	return metrics, nil
+}
+
+func (s *Source) fetchGitTree(ctx context.Context, owner, name, branch string) (*GitTree, error) {
+	endpoint := fmt.Sprintf("/repos/%s/%s/git/trees/%s", owner, name, branch)
+	data, err := s.client.GetWithParams(ctx, endpoint, map[string]string{"recursive": "1"})
+	if err != nil {
+		return nil, err
+	}
+
+	var tree GitTree
+	if err := json.Unmarshal(data, &tree); err != nil {
+		return nil, fmt.Errorf("parsing git tree: %w", err)
+	}
+
+	return &tree, nil
 }
 
 // parseRepoURL extracts owner and repo name from a GitHub URL.

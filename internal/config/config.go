@@ -9,10 +9,10 @@ import (
 )
 
 type Config struct {
-	Project     ProjectConfig     `toml:"project"`
+	Project      ProjectConfig      `toml:"project"`
 	Repositories []RepositoryConfig `toml:"repositories"`
-	Weights     WeightsConfig     `toml:"weights"`
-	Thresholds  ThresholdsConfig  `toml:"thresholds"`
+	Weights      WeightsConfig      `toml:"weights"`
+	Thresholds   ThresholdsConfig   `toml:"thresholds"`
 }
 
 type ProjectConfig struct {
@@ -27,10 +27,10 @@ type RepositoryConfig struct {
 
 // WeightsConfig defines dimension weights for scoring (must sum to 1.0).
 type WeightsConfig struct {
-	Security      float64 `toml:"security"`
-	Delivery      float64 `toml:"delivery"`
+	Security       float64 `toml:"security"`
+	Delivery       float64 `toml:"delivery"`
 	Infrastructure float64 `toml:"infrastructure"`
-	Code          float64 `toml:"code"`
+	Code           float64 `toml:"code"`
 }
 
 type ThresholdsConfig struct {
