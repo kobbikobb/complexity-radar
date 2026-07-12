@@ -5,10 +5,10 @@ import "time"
 type Dimension string
 
 const (
-	DimensionSecurity      Dimension = "security"
-	DimensionDelivery      Dimension = "delivery"
+	DimensionSecurity       Dimension = "security"
+	DimensionDelivery       Dimension = "delivery"
 	DimensionInfrastructure Dimension = "infrastructure"
-	DimensionCode          Dimension = "code"
+	DimensionCode           Dimension = "code"
 )
 
 type MetricTypeName string
@@ -83,10 +83,10 @@ type DimensionScore struct {
 }
 
 type ProjectReport struct {
-	ID          int64
-	ProjectID   int64
-	TotalScore  float64
-	ComputedAt  time.Time
+	ID         int64
+	ProjectID  int64
+	TotalScore float64
+	ComputedAt time.Time
 }
 
 type ProjectReportScore struct {

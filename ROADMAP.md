@@ -270,5 +270,5 @@ Each item below is a separate PR. Work proceeds top-to-bottom.
 ## Dependencies
 
 - `gh` CLI must be installed and authenticated
-- Go 1.21+ for building from source
+- Go 1.25+ for building from source
 - SQLite (embedded via Go driver, no install needed)

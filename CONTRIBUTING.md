@@ -4,7 +4,7 @@ Thank you for your interest in contributing!
 
 ## Prerequisites
 
-- Go 1.21+
+- Go 1.25+
 - `gh` CLI (authenticated)
 - `golangci-lint` (for linting)
 - `goreleaser` (for releases, optional)

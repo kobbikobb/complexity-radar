@@ -52,8 +52,12 @@ func TestCreateAndGetProject(t *testing.T) {
 func TestListProjects(t *testing.T) {
 	s := newTestStore(t)
 
-	s.CreateProject(&model.Project{Name: "Alpha"})
-	s.CreateProject(&model.Project{Name: "Beta"})
+	if err := s.CreateProject(&model.Project{Name: "Alpha"}); err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	if err := s.CreateProject(&model.Project{Name: "Beta"}); err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
 
 	projects, err := s.ListProjects()
 	if err != nil {
@@ -72,14 +76,19 @@ func TestUpdateProject(t *testing.T) {
 	s := newTestStore(t)
 
 	p := &model.Project{Name: "Old", Description: "desc"}
-	s.CreateProject(p)
+	if err := s.CreateProject(p); err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
 
 	p.Name = "New"
 	if err := s.UpdateProject(p); err != nil {
 		t.Fatalf("UpdateProject: %v", err)
 	}
 
-	got, _ := s.GetProject(p.ID)
+	got, err := s.GetProject(p.ID)
+	if err != nil {
+		t.Fatalf("GetProject: %v", err)
+	}
 	if got.Name != "New" {
 		t.Errorf("name = %q, want %q", got.Name, "New")
 	}
@@ -89,7 +98,9 @@ func TestDeleteProject(t *testing.T) {
 	s := newTestStore(t)
 
 	p := &model.Project{Name: "ToDelete"}
-	s.CreateProject(p)
+	if err := s.CreateProject(p); err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
 
 	if err := s.DeleteProject(p.ID); err != nil {
 		t.Fatalf("DeleteProject: %v", err)
@@ -114,7 +125,9 @@ func TestCreateAndGetRepository(t *testing.T) {
 	s := newTestStore(t)
 
 	p := &model.Project{Name: "Parent"}
-	s.CreateProject(p)
+	if err := s.CreateProject(p); err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
 
 	r := &model.Repository{ProjectID: p.ID, URL: "github.com/org/repo", Branch: "main"}
 	if err := s.CreateRepository(r); err != nil {
@@ -145,10 +158,16 @@ func TestListRepositories(t *testing.T) {
 	s := newTestStore(t)
 
 	p := &model.Project{Name: "Parent"}
-	s.CreateProject(p)
+	if err := s.CreateProject(p); err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
 
-	s.CreateRepository(&model.Repository{ProjectID: p.ID, URL: "github.com/org/repo1"})
-	s.CreateRepository(&model.Repository{ProjectID: p.ID, URL: "github.com/org/repo2"})
+	if err := s.CreateRepository(&model.Repository{ProjectID: p.ID, URL: "github.com/org/repo1"}); err != nil {
+		t.Fatalf("CreateRepository: %v", err)
+	}
+	if err := s.CreateRepository(&model.Repository{ProjectID: p.ID, URL: "github.com/org/repo2"}); err != nil {
+		t.Fatalf("CreateRepository: %v", err)
+	}
 
 	repos, err := s.ListRepositories(p.ID)
 	if err != nil {
@@ -164,10 +183,14 @@ func TestDeleteRepository(t *testing.T) {
 	s := newTestStore(t)
 
 	p := &model.Project{Name: "Parent"}
-	s.CreateProject(p)
+	if err := s.CreateProject(p); err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
 
 	r := &model.Repository{ProjectID: p.ID, URL: "github.com/org/repo", Branch: "main"}
-	s.CreateRepository(r)
+	if err := s.CreateRepository(r); err != nil {
+		t.Fatalf("CreateRepository: %v", err)
+	}
 
 	if err := s.DeleteRepository(r.ID); err != nil {
 		t.Fatalf("DeleteRepository: %v", err)
@@ -183,12 +206,18 @@ func TestForeignKeyCascadeDelete(t *testing.T) {
 	s := newTestStore(t)
 
 	p := &model.Project{Name: "Cascade"}
-	s.CreateProject(p)
+	if err := s.CreateProject(p); err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
 
 	r := &model.Repository{ProjectID: p.ID, URL: "github.com/org/repo", Branch: "main"}
-	s.CreateRepository(r)
+	if err := s.CreateRepository(r); err != nil {
+		t.Fatalf("CreateRepository: %v", err)
+	}
 
-	s.DeleteProject(p.ID)
+	if err := s.DeleteProject(p.ID); err != nil {
+		t.Fatalf("DeleteProject: %v", err)
+	}
 
 	_, err := s.GetRepository(r.ID)
 	if err == nil {
@@ -198,10 +227,6 @@ func TestForeignKeyCascadeDelete(t *testing.T) {
 
 func TestEnsureAndGetMetricTypes(t *testing.T) {
 	s := newTestStore(t)
-
-	if err := s.EnsureMetricTypes(); err != nil {
-		t.Fatalf("EnsureMetricTypes: %v", err)
-	}
 
 	mt, err := s.GetMetricTypeByName(model.MetricTypeSecurityVulnerabilities)
 	if err != nil {
@@ -228,9 +253,6 @@ func TestEnsureMetricTypesIdempotent(t *testing.T) {
 	s := newTestStore(t)
 
 	if err := s.EnsureMetricTypes(); err != nil {
-		t.Fatalf("first EnsureMetricTypes: %v", err)
-	}
-	if err := s.EnsureMetricTypes(); err != nil {
 		t.Fatalf("second EnsureMetricTypes: %v", err)
 	}
 }
@@ -239,11 +261,14 @@ func TestCreateAndGetMetric(t *testing.T) {
 	s := newTestStore(t)
 
 	p := &model.Project{Name: "P"}
-	s.CreateProject(p)
+	if err := s.CreateProject(p); err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
 	r := &model.Repository{ProjectID: p.ID, URL: "github.com/org/repo", Branch: "main"}
-	s.CreateRepository(r)
+	if err := s.CreateRepository(r); err != nil {
+		t.Fatalf("CreateRepository: %v", err)
+	}
 
-	s.EnsureMetricTypes()
 	mt, _ := s.GetMetricTypeByName(model.MetricTypeSecurityVulnerabilities)
 
 	m := &model.Metric{
@@ -272,9 +297,13 @@ func TestCreateAndGetDimensionScore(t *testing.T) {
 	s := newTestStore(t)
 
 	p := &model.Project{Name: "P"}
-	s.CreateProject(p)
+	if err := s.CreateProject(p); err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
 	r := &model.Repository{ProjectID: p.ID, URL: "github.com/org/repo", Branch: "main"}
-	s.CreateRepository(r)
+	if err := s.CreateRepository(r); err != nil {
+		t.Fatalf("CreateRepository: %v", err)
+	}
 
 	ds := &model.DimensionScore{
 		RepositoryID: r.ID,
@@ -306,7 +335,9 @@ func TestCreateAndGetProjectReport(t *testing.T) {
 	s := newTestStore(t)
 
 	p := &model.Project{Name: "P"}
-	s.CreateProject(p)
+	if err := s.CreateProject(p); err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
 
 	pr := &model.ProjectReport{
 		ProjectID:  p.ID,
@@ -333,10 +364,14 @@ func TestAddAndGetProjectReportScores(t *testing.T) {
 	s := newTestStore(t)
 
 	p := &model.Project{Name: "P"}
-	s.CreateProject(p)
+	if err := s.CreateProject(p); err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
 
 	pr := &model.ProjectReport{ProjectID: p.ID, TotalScore: 80}
-	s.CreateProjectReport(pr)
+	if err := s.CreateProjectReport(pr); err != nil {
+		t.Fatalf("CreateProjectReport: %v", err)
+	}
 
 	dimensions := []struct {
 		dimension model.Dimension
@@ -440,10 +475,6 @@ func TestFullWorkflow(t *testing.T) {
 		t.Fatalf("CreateRepository: %v", err)
 	}
 
-	if err := s.EnsureMetricTypes(); err != nil {
-		t.Fatalf("EnsureMetricTypes: %v", err)
-	}
-
 	mt, err := s.GetMetricTypeByName(model.MetricTypeDependencyCount)
 	if err != nil {
 		t.Fatalf("GetMetricTypeByName: %v", err)
@@ -479,12 +510,30 @@ func TestFullWorkflow(t *testing.T) {
 		t.Fatalf("AddProjectReportScore: %v", err)
 	}
 
-	gotP, _ := s.GetProject(p.ID)
-	gotR, _ := s.GetRepository(r.ID)
-	gotMetrics, _ := s.GetMetricsByRepository(r.ID)
-	gotDS, _ := s.GetDimensionScoresByRepository(r.ID)
-	gotPR, _ := s.GetProjectReport(pr.ID)
-	gotPRS, _ := s.GetProjectReportScores(pr.ID)
+	gotP, err := s.GetProject(p.ID)
+	if err != nil {
+		t.Fatalf("GetProject: %v", err)
+	}
+	gotR, err := s.GetRepository(r.ID)
+	if err != nil {
+		t.Fatalf("GetRepository: %v", err)
+	}
+	gotMetrics, err := s.GetMetricsByRepository(r.ID)
+	if err != nil {
+		t.Fatalf("GetMetricsByRepository: %v", err)
+	}
+	gotDS, err := s.GetDimensionScoresByRepository(r.ID)
+	if err != nil {
+		t.Fatalf("GetDimensionScoresByRepository: %v", err)
+	}
+	gotPR, err := s.GetProjectReport(pr.ID)
+	if err != nil {
+		t.Fatalf("GetProjectReport: %v", err)
+	}
+	gotPRS, err := s.GetProjectReportScores(pr.ID)
+	if err != nil {
+		t.Fatalf("GetProjectReportScores: %v", err)
+	}
 
 	if gotP.Name != "Full Test" {
 		t.Errorf("project name = %q", gotP.Name)

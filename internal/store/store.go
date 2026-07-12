@@ -38,6 +38,10 @@ func New(dbPath string) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("running migrations: %w", err)
 	}
+	if err := s.EnsureMetricTypes(); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("seeding metric types: %w", err)
+	}
 
 	return s, nil
 }
@@ -51,6 +55,9 @@ func NewFromDB(db *sql.DB) (*Store, error) {
 	s := &Store{db: db}
 	if err := s.migrate(); err != nil {
 		return nil, fmt.Errorf("running migrations: %w", err)
+	}
+	if err := s.EnsureMetricTypes(); err != nil {
+		return nil, fmt.Errorf("seeding metric types: %w", err)
 	}
 
 	return s, nil
@@ -123,8 +130,14 @@ func (s *Store) GetProject(id int64) (*model.Project, error) {
 		return nil, fmt.Errorf("querying project: %w", err)
 	}
 
-	p.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
-	p.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
+	p.CreatedAt, err = time.Parse(time.RFC3339, createdAt)
+	if err != nil {
+		return nil, fmt.Errorf("parsing created_at: %w", err)
+	}
+	p.UpdatedAt, err = time.Parse(time.RFC3339, updatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("parsing updated_at: %w", err)
+	}
 	return p, nil
 }
 
@@ -142,8 +155,14 @@ func (s *Store) ListProjects() ([]model.Project, error) {
 		if err := rows.Scan(&p.ID, &p.Name, &p.Description, &createdAt, &updatedAt); err != nil {
 			return nil, fmt.Errorf("scanning project: %w", err)
 		}
-		p.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
-		p.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
+		p.CreatedAt, err = time.Parse(time.RFC3339, createdAt)
+		if err != nil {
+			return nil, fmt.Errorf("parsing created_at: %w", err)
+		}
+		p.UpdatedAt, err = time.Parse(time.RFC3339, updatedAt)
+		if err != nil {
+			return nil, fmt.Errorf("parsing updated_at: %w", err)
+		}
 		projects = append(projects, p)
 	}
 
@@ -217,8 +236,14 @@ func (s *Store) GetRepository(id int64) (*model.Repository, error) {
 		return nil, fmt.Errorf("querying repository: %w", err)
 	}
 
-	r.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
-	r.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
+	r.CreatedAt, err = time.Parse(time.RFC3339, createdAt)
+	if err != nil {
+		return nil, fmt.Errorf("parsing created_at: %w", err)
+	}
+	r.UpdatedAt, err = time.Parse(time.RFC3339, updatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("parsing updated_at: %w", err)
+	}
 	return r, nil
 }
 
@@ -239,8 +264,14 @@ func (s *Store) ListRepositories(projectID int64) ([]model.Repository, error) {
 		if err := rows.Scan(&r.ID, &r.ProjectID, &r.URL, &r.Branch, &createdAt, &updatedAt); err != nil {
 			return nil, fmt.Errorf("scanning repository: %w", err)
 		}
-		r.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
-		r.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
+		r.CreatedAt, err = time.Parse(time.RFC3339, createdAt)
+		if err != nil {
+			return nil, fmt.Errorf("parsing created_at: %w", err)
+		}
+		r.UpdatedAt, err = time.Parse(time.RFC3339, updatedAt)
+		if err != nil {
+			return nil, fmt.Errorf("parsing updated_at: %w", err)
+		}
 		repos = append(repos, r)
 	}
 
@@ -326,7 +357,10 @@ func (s *Store) GetMetricsByRepository(repoID int64) ([]model.Metric, error) {
 		if err := rows.Scan(&m.ID, &m.RepositoryID, &m.MetricTypeID, &m.Value, &collectedAt); err != nil {
 			return nil, fmt.Errorf("scanning metric: %w", err)
 		}
-		m.CollectedAt, _ = time.Parse(time.RFC3339, collectedAt)
+		m.CollectedAt, err = time.Parse(time.RFC3339, collectedAt)
+		if err != nil {
+			return nil, fmt.Errorf("parsing collected_at: %w", err)
+		}
 		metrics = append(metrics, m)
 	}
 
@@ -371,7 +405,10 @@ func (s *Store) GetDimensionScoresByRepository(repoID int64) ([]model.DimensionS
 			return nil, fmt.Errorf("scanning dimension score: %w", err)
 		}
 		ds.Dimension = model.Dimension(dimension)
-		ds.ComputedAt, _ = time.Parse(time.RFC3339, computedAt)
+		ds.ComputedAt, err = time.Parse(time.RFC3339, computedAt)
+		if err != nil {
+			return nil, fmt.Errorf("parsing computed_at: %w", err)
+		}
 		scores = append(scores, ds)
 	}
 
@@ -411,7 +448,10 @@ func (s *Store) GetProjectReport(id int64) (*model.ProjectReport, error) {
 		return nil, fmt.Errorf("querying project report: %w", err)
 	}
 
-	pr.ComputedAt, _ = time.Parse(time.RFC3339, computedAt)
+	pr.ComputedAt, err = time.Parse(time.RFC3339, computedAt)
+	if err != nil {
+		return nil, fmt.Errorf("parsing computed_at: %w", err)
+	}
 	return pr, nil
 }
 
@@ -461,4 +501,3 @@ func (s *Store) GetProjectReportScores(reportID int64) ([]model.ProjectReportSco
 func (s *Store) MigrateSchema() error {
 	return s.migrate()
 }
-
