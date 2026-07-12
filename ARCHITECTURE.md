@@ -15,23 +15,24 @@ High-level architecture of ComplexityRadar.
 ├────────┼──────────────┼──────────────┼──────────────────────────┤
 │        │         Internal Packages   │                          │
 │        │              │              │                          │
-│   ┌────▼─────┐   ┌────▼─────┐       │                          │
-│   │Collector │   │ Scorer   │       │                          │
-│   │          │   │          │       │                          │
-│   │ - reads  │   │ - norma- │       │                          │
-│   │   config │   │   lize   │       │                          │
-│   │ - calls  │   │ - weight │       │                          │
-│   │   sources│   │ - score  │       │                          │
-│   └────┬─────┘   └──────────┘       │                          │
-│        │                            │                          │
-│   ┌────▼─────────────────┐   ┌──────▼──────┐                  │
-│   │     Sources          │   │   Output     │                  │
-│   │  ┌───────────────┐   │   │  ┌────────┐ │                  │
-│   │  │    GitHub     │   │   │  │Terminal│ │                  │
-│   │  │  (v1 source)  │   │   │  └────────┘ │                  │
-│   │  └───────────────┘   │   │  (more...)  │                  │
-│   │  (extensible)        │   └─────────────┘                  │
-│   └──────────────────────┘                                    │
+│   ┌────▼─────────────────────────────▼──────┐                  │
+│   │              Core Package               │                  │
+│   │  ┌─────────────┐  ┌─────────────────┐  │                  │
+│   │  │   Types     │  │   Interfaces    │  │                  │
+│   │  │ - Metric    │  │ - Source        │  │                  │
+│   │  │ - Repository│  │ - OutputFormatter│ │                  │
+│   │  │ - Report    │  │                 │  │                  │
+│   │  └─────────────┘  └─────────────────┘  │                  │
+│   └────────────────────────────────────────┘                  │
+│                                                                │
+│   ┌──────────────────────────┐   ┌─────────────┐              │
+│   │        Sources           │   │    Output   │              │
+│   │  ┌───────────────┐      │   │  ┌────────┐ │              │
+│   │  │    GitHub     │      │   │  │Terminal│ │              │
+│   │  │  (v1 source)  │      │   │  └────────┘ │              │
+│   │  └───────────────┘      │   │  (more...)  │              │
+│   │  (extensible)           │   └─────────────┘              │
+│   └──────────────────────────┘                               │
 │                                                                │
 ├────────────────────────────────────────────────────────────────┤
 │                     Storage (SQLite)                           │
@@ -79,6 +80,8 @@ High-level architecture of ComplexityRadar.
 
 ## Key Interfaces
 
+Interfaces are defined in `internal/core/interfaces.go`:
+
 ### Source
 
 ```go
@@ -103,20 +106,16 @@ type OutputFormatter interface {
 complexity-radar/
 ├── cmd/radar/              # CLI entrypoint
 │   ├── main.go             # Entry point
-│   ├── root.go             # Root command + subcommands
 │   ├── collect.go          # Collect command
 │   ├── report.go           # Report command
 │   └── scan.go             # Scan command (collect + report)
 ├── internal/
-│   ├── collector/          # Data collection orchestration
-│   ├── scorer/             # Scoring engine
+│   ├── core/               # Core domain types and interfaces
+│   │   ├── metrics.go      # MetricType, Repository, Metric, Report types
+│   │   ├── interfaces.go   # Source, OutputFormatter interfaces
+│   │   └── doc.go          # Package documentation
 │   ├── sources/            # Source implementations
-│   │   └── github/         # GitHub source (v1)
-│   ├── store/              # SQLite storage layer
-│   ├── model/              # Domain types
 │   └── output/             # Report formatters
-│       └── terminal/       # Terminal output (v1)
-├── pkg/                    # Public API (if needed)
 ├── configs/                # Default config templates
 ├── docs/                   # Documentation
 └── migrations/             # SQLite schema migrations
