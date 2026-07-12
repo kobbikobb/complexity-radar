@@ -1,6 +1,9 @@
 package core
 
-import "context"
+import (
+	"context"
+	"io"
+)
 
 // Source defines the interface that all metric sources must implement.
 // A source is responsible for collecting specific metrics from a repository.
@@ -17,8 +20,8 @@ type Source interface {
 }
 
 // OutputFormatter defines the interface that all report formatters must implement.
-// A formatter converts a Report into a string representation for display or export.
+// A formatter writes the formatted representation of a Report to the provided writer.
 type OutputFormatter interface {
-	// Format converts a report into a formatted string.
-	Format(report Report) string
+	// Format writes the formatted report to w and returns any error encountered.
+	Format(report Report, w io.Writer) error
 }
