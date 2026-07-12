@@ -194,6 +194,105 @@ func TestReportProjectByName(t *testing.T) {
 	})
 }
 
+func TestScoreForDimension(t *testing.T) {
+	tests := []struct {
+		name      string
+		report    ProjectReport
+		dimension string
+		wantScore float64
+		wantOk    bool
+	}{
+		{
+			name: "existing dimension",
+			report: ProjectReport{
+				DimensionScores: []DimensionScore{
+					{Dimension: "size", Score: 3.5, Weight: 0.4},
+					{Dimension: "complexity", Score: 7.2, Weight: 0.6},
+				},
+			},
+			dimension: "size",
+			wantScore: 3.5,
+			wantOk:    true,
+		},
+		{
+			name: "non-existing dimension",
+			report: ProjectReport{
+				DimensionScores: []DimensionScore{
+					{Dimension: "size", Score: 3.5, Weight: 0.4},
+				},
+			},
+			dimension: "security",
+			wantScore: 0,
+			wantOk:    false,
+		},
+		{
+			name: "empty DimensionScores",
+			report: ProjectReport{
+				DimensionScores: []DimensionScore{},
+			},
+			dimension: "size",
+			wantScore: 0,
+			wantOk:    false,
+		},
+		{
+			name: "nil DimensionScores",
+			report:    ProjectReport{},
+			dimension: "size",
+			wantScore: 0,
+			wantOk:    false,
+		},
+		{
+			name: "multiple dimensions returns correct one",
+			report: ProjectReport{
+				DimensionScores: []DimensionScore{
+					{Dimension: "size", Score: 1.0, Weight: 0.2},
+					{Dimension: "complexity", Score: 5.0, Weight: 0.3},
+					{Dimension: "documentation", Score: 9.0, Weight: 0.5},
+				},
+			},
+			dimension: "complexity",
+			wantScore: 5.0,
+			wantOk:    true,
+		},
+		{
+			name: "empty dimension string matches empty dimension",
+			report: ProjectReport{
+				DimensionScores: []DimensionScore{
+					{Dimension: "", Score: 2.0, Weight: 1.0},
+				},
+			},
+			dimension: "",
+			wantScore: 2.0,
+			wantOk:    true,
+		},
+		{
+			name: "last dimension in list",
+			report: ProjectReport{
+				DimensionScores: []DimensionScore{
+					{Dimension: "a", Score: 1.0, Weight: 0.5},
+					{Dimension: "b", Score: 2.0, Weight: 0.5},
+					{Dimension: "c", Score: 3.0, Weight: 0.5},
+				},
+			},
+			dimension: "c",
+			wantScore: 3.0,
+			wantOk:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotScore, gotOk := tt.report.ScoreForDimension(tt.dimension)
+			if gotOk != tt.wantOk {
+				t.Errorf("ScoreForDimension() ok = %v, want %v", gotOk, tt.wantOk)
+			}
+			if gotScore != tt.wantScore {
+				t.Errorf("ScoreForDimension() score = %v, want %v", gotScore, tt.wantScore)
+			}
+		})
+	}
+}
+
 func TestMetricTypeEqual(t *testing.T) {
 	base := MetricType{Name: "loc", Dimension: "size", Unit: "lines", Source: "git"}
 

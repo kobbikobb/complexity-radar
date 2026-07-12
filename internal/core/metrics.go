@@ -46,6 +46,14 @@ type Metric struct {
 	Value float64    `json:"value"`
 }
 
+// DimensionScore holds the aggregated score, weight, and name for a single
+// dimension within a project report.
+type DimensionScore struct {
+	Dimension string  `json:"dimension"`
+	Score     float64 `json:"score"`
+	Weight    float64 `json:"weight"`
+}
+
 // Report holds the complete analysis results for a set of repositories.
 type Report struct {
 	Projects []ProjectReport `json:"projects"`
@@ -64,9 +72,10 @@ func (r Report) ProjectByName(name string) (*ProjectReport, bool) {
 
 // ProjectReport contains the metrics and computed scores for a single repository.
 type ProjectReport struct {
-	Repository Repository `json:"repository"`
-	Metrics    []Metric   `json:"metrics"`
-	Score      float64    `json:"score"`
+	Repository      Repository       `json:"repository"`
+	Metrics         []Metric         `json:"metrics"`
+	DimensionScores []DimensionScore `json:"dimension_scores"`
+	Score           float64          `json:"score"`
 }
 
 // MetricsByDimension groups the project's metrics by their type dimension.
@@ -78,4 +87,15 @@ func (p ProjectReport) MetricsByDimension() map[string][]Metric {
 		out[d] = append(out[d], m)
 	}
 	return out
+}
+
+// ScoreForDimension returns the score for the named dimension.
+// The second return value reports whether a matching dimension was found.
+func (p *ProjectReport) ScoreForDimension(dimension string) (float64, bool) {
+	for _, ds := range p.DimensionScores {
+		if ds.Dimension == dimension {
+			return ds.Score, true
+		}
+	}
+	return 0, false
 }
