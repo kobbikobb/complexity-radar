@@ -1,7 +1,6 @@
 package output
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/kobbikobb/complexity-radar/internal/model"
@@ -34,17 +33,6 @@ type MetricReport struct {
 
 type OutputFormatter interface {
 	Format(report Report) string
-}
-
-func ScoreColor(score float64) string {
-	switch {
-	case score >= 80:
-		return fmt.Sprintf("\033[32m%.1f\033[0m", score)
-	case score >= 60:
-		return fmt.Sprintf("\033[33m%.1f\033[0m", score)
-	default:
-		return fmt.Sprintf("\033[31m%.1f\033[0m", score)
-	}
 }
 
 func ScoreGrade(score float64) string {

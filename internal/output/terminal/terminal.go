@@ -26,14 +26,14 @@ func (f *TerminalFormatter) Format(report output.Report) string {
 	b.WriteString("  ComplexityRadar Report\n")
 	b.WriteString("═══════════════════════════════════════════════════\n")
 	b.WriteString("\n")
-	b.WriteString(fmt.Sprintf("  Project: %s\n", report.ProjectName))
+	fmt.Fprintf(&b, "  Project: %s\n", report.ProjectName)
 	if report.ProjectDescription != "" {
-		b.WriteString(fmt.Sprintf("  %s\n", report.ProjectDescription))
+		fmt.Fprintf(&b, "  %s\n", report.ProjectDescription)
 	}
 	b.WriteString("\n")
 
 	b.WriteString("───────────────────────────────────────────────────\n")
-	b.WriteString(fmt.Sprintf("  OVERALL SCORE: %s [%s]\n", f.colorScore(report.OverallScore), output.ScoreGrade(report.OverallScore)))
+	fmt.Fprintf(&b, "  OVERALL SCORE: %s [%s]\n", f.colorScore(report.OverallScore), output.ScoreGrade(report.OverallScore))
 	b.WriteString("───────────────────────────────────────────────────\n")
 	b.WriteString("\n")
 
@@ -66,12 +66,12 @@ func (f *TerminalFormatter) Format(report output.Report) string {
 	if len(report.Errors) > 0 {
 		b.WriteString("  ⚠ Errors:\n")
 		for _, e := range report.Errors {
-			b.WriteString(fmt.Sprintf("    - %s\n", e))
+			fmt.Fprintf(&b, "    - %s\n", e)
 		}
 		b.WriteString("\n")
 	}
 
-	b.WriteString(fmt.Sprintf("  Collected: %s\n", report.CollectedAt.UTC().Format(time.RFC3339)))
+	fmt.Fprintf(&b, "  Collected: %s\n", report.CollectedAt.UTC().Format(time.RFC3339))
 	b.WriteString("═══════════════════════════════════════════════════\n")
 
 	return b.String()
@@ -92,7 +92,17 @@ func (f *TerminalFormatter) colorScore(score float64) string {
 }
 
 func formatMetricName(name model.MetricTypeName) string {
+	acronyms := map[string]string{
+		"ci cd": "CI/CD",
+		"k8s":   "K8s",
+		"prs":   "PRs",
+	}
+
 	s := strings.ReplaceAll(string(name), "_", " ")
+	if replacement, ok := acronyms[s]; ok {
+		return replacement
+	}
+
 	var result strings.Builder
 	capitalize := true
 	for _, r := range s {
@@ -148,7 +158,7 @@ func tableRow(widths []int, cols ...string) string {
 		}
 		leftPad := padding / 2
 		rightPad := padding - leftPad
-		b.WriteString(fmt.Sprintf("%s%s%s", strings.Repeat(" ", leftPad+1), col, strings.Repeat(" ", rightPad+1)))
+		fmt.Fprintf(&b, "%s%s%s", strings.Repeat(" ", leftPad+1), col, strings.Repeat(" ", rightPad+1))
 		b.WriteString("│")
 	}
 	b.WriteString("\n")
