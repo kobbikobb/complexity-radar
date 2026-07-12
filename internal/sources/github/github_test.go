@@ -36,6 +36,16 @@ func (m *mockClient) GetWithParams(_ context.Context, endpoint string, _ map[str
 	return nil, fmt.Errorf("no mock response for %s", endpoint)
 }
 
+func (m *mockClient) GetPaginated(_ context.Context, endpoint string, _ map[string]string, _ int) (json.RawMessage, error) {
+	if err, ok := m.errors[endpoint]; ok {
+		return nil, err
+	}
+	if resp, ok := m.responses[endpoint]; ok {
+		return resp, nil
+	}
+	return nil, fmt.Errorf("no mock response for %s", endpoint)
+}
+
 func findMetric(metrics []sources.SourceMetric, typ model.MetricTypeName) (sources.SourceMetric, bool) {
 	for _, m := range metrics {
 		if m.Type == typ {
