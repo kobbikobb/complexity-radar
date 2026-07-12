@@ -342,7 +342,6 @@ func TestMultipleValidationErrors(t *testing.T) {
 [project]
 
 [[repositories]]
-url = "github.com/org/repo"
 `)
 
 	_, err := Parse(data)
@@ -353,6 +352,90 @@ url = "github.com/org/repo"
 	errMsg := err.Error()
 	if !strings.Contains(errMsg, "project.name is required") {
 		t.Errorf("error should contain project.name validation, got: %q", errMsg)
+	}
+	if !strings.Contains(errMsg, "repositories[0].url is required") {
+		t.Errorf("error should contain repositories[0].url validation, got: %q", errMsg)
+	}
+}
+
+func TestParsePartialWeights(t *testing.T) {
+	data := []byte(`
+[project]
+name = "Test"
+
+[[repositories]]
+url = "github.com/org/repo"
+
+[weights]
+security = 0.30
+`)
+
+	_, err := Parse(data)
+	if err == nil {
+		t.Fatal("expected error for partial weights")
+	}
+	if !strings.Contains(err.Error(), "weights must sum to 1.0") {
+		t.Errorf("error = %q, want it to contain %q", err.Error(), "weights must sum to 1.0")
+	}
+}
+
+func TestParseWeightExceedsOne(t *testing.T) {
+	data := []byte(`
+[project]
+name = "Test"
+
+[[repositories]]
+url = "github.com/org/repo"
+
+[weights]
+security = 1.5
+delivery = 0
+infrastructure = 0
+code = 0
+`)
+
+	_, err := Parse(data)
+	if err == nil {
+		t.Fatal("expected error for weight exceeding 1.0")
+	}
+	if !strings.Contains(err.Error(), "weights must sum to 1.0") {
+		t.Errorf("error = %q, want it to contain %q", err.Error(), "weights must sum to 1.0")
+	}
+}
+
+func TestParseWhitespaceProjectName(t *testing.T) {
+	data := []byte(`
+[project]
+name = "   "
+
+[[repositories]]
+url = "github.com/org/repo"
+`)
+
+	_, err := Parse(data)
+	if err == nil {
+		t.Fatal("expected error for whitespace-only project name")
+	}
+	if !strings.Contains(err.Error(), "project.name is required") {
+		t.Errorf("error = %q, want it to contain %q", err.Error(), "project.name is required")
+	}
+}
+
+func TestParseWhitespaceRepositoryURL(t *testing.T) {
+	data := []byte(`
+[project]
+name = "Test"
+
+[[repositories]]
+url = "   "
+`)
+
+	_, err := Parse(data)
+	if err == nil {
+		t.Fatal("expected error for whitespace-only repository URL")
+	}
+	if !strings.Contains(err.Error(), "repositories[0].url is required") {
+		t.Errorf("error = %q, want it to contain %q", err.Error(), "repositories[0].url is required")
 	}
 }
 

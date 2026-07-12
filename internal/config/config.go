@@ -8,7 +8,6 @@ import (
 	"github.com/pelletier/go-toml/v2"
 )
 
-// Config represents the full TOML configuration file.
 type Config struct {
 	Project     ProjectConfig     `toml:"project"`
 	Repositories []RepositoryConfig `toml:"repositories"`
@@ -16,13 +15,11 @@ type Config struct {
 	Thresholds  ThresholdsConfig  `toml:"thresholds"`
 }
 
-// ProjectConfig holds project-level metadata.
 type ProjectConfig struct {
 	Name        string `toml:"name"`
 	Description string `toml:"description"`
 }
 
-// RepositoryConfig defines a single repository to measure.
 type RepositoryConfig struct {
 	URL    string `toml:"url"`
 	Branch string `toml:"branch"`
@@ -36,7 +33,6 @@ type WeightsConfig struct {
 	Code          float64 `toml:"code"`
 }
 
-// ThresholdsConfig defines thresholds for metrics.
 type ThresholdsConfig struct {
 	SecurityVulnerabilitiesCriticalMax *int     `toml:"security_vulnerabilities_critical_max"`
 	BuildSuccessRatioMin               *float64 `toml:"build_success_ratio_min"`
