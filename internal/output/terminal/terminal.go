@@ -163,11 +163,11 @@ func tableRow(widths []int, cols ...string) string {
 		visible := stripANSI(col)
 		if len(visible) > widths[i] {
 			if widths[i] > 3 {
-				col = col[:widths[i]-1] + "…"
+				visible = visible[:widths[i]-1] + "…"
 			} else {
-				col = col[:widths[i]]
+				visible = visible[:widths[i]]
 			}
-			visible = stripANSI(col)
+			col = visible
 		}
 		padding := widths[i] - len(visible)
 		if padding < 0 {
