@@ -133,6 +133,30 @@ func (s *Store) CreateProject(p *model.Project) error {
 	return nil
 }
 
+func (s *Store) GetProjectByName(name string) (*model.Project, error) {
+	p := &model.Project{}
+	var createdAt, updatedAt string
+	err := s.db.QueryRow(
+		"SELECT id, name, description, created_at, updated_at FROM projects WHERE name = ?", name,
+	).Scan(&p.ID, &p.Name, &p.Description, &createdAt, &updatedAt)
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("project %q not found", name)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("querying project by name: %w", err)
+	}
+
+	p.CreatedAt, err = time.Parse(time.RFC3339, createdAt)
+	if err != nil {
+		return nil, fmt.Errorf("parsing created_at: %w", err)
+	}
+	p.UpdatedAt, err = time.Parse(time.RFC3339, updatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("parsing updated_at: %w", err)
+	}
+	return p, nil
+}
+
 func (s *Store) GetProject(id int64) (*model.Project, error) {
 	p := &model.Project{}
 	var createdAt, updatedAt string
@@ -237,6 +261,35 @@ func (s *Store) CreateRepository(r *model.Repository) error {
 	r.CreatedAt, _ = time.Parse(time.RFC3339, now)
 	r.UpdatedAt = r.CreatedAt
 	return nil
+}
+
+// FindOrCreateRepository returns an existing repository matching projectID and URL,
+// or creates a new one if none exists.
+func (s *Store) FindOrCreateRepository(projectID int64, url, branch string) (*model.Repository, error) {
+	r := &model.Repository{}
+	var createdAt, updatedAt string
+	err := s.db.QueryRow(
+		"SELECT id, project_id, url, branch, created_at, updated_at FROM repositories WHERE project_id = ? AND url = ?",
+		projectID, url,
+	).Scan(&r.ID, &r.ProjectID, &r.URL, &r.Branch, &createdAt, &updatedAt)
+	if err == nil {
+		r.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
+		r.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
+		return r, nil
+	}
+	if err != sql.ErrNoRows {
+		return nil, fmt.Errorf("querying repository: %w", err)
+	}
+
+	repo := &model.Repository{
+		ProjectID: projectID,
+		URL:       url,
+		Branch:    branch,
+	}
+	if err := s.CreateRepository(repo); err != nil {
+		return nil, err
+	}
+	return repo, nil
 }
 
 func (s *Store) GetRepository(id int64) (*model.Repository, error) {

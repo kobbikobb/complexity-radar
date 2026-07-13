@@ -40,17 +40,9 @@ type ProgressFunc func(ProgressEvent)
 // noopProgress does nothing when no progress function is provided.
 func noopProgress(ProgressEvent) {}
 
-func Collect(ctx context.Context, cfg *config.Config, s *store.Store, src model.Source, onProgress ProgressFunc) (*CollectionResult, error) {
+func Collect(ctx context.Context, cfg *config.Config, s *store.Store, project *model.Project, repos []model.Repository, src model.Source, onProgress ProgressFunc) (*CollectionResult, error) {
 	if onProgress == nil {
 		onProgress = noopProgress
-	}
-
-	project := &model.Project{
-		Name:        cfg.Project.Name,
-		Description: cfg.Project.Description,
-	}
-	if err := s.CreateProject(project); err != nil {
-		return nil, fmt.Errorf("creating project: %w", err)
 	}
 
 	result := &CollectionResult{Project: *project}
@@ -58,30 +50,20 @@ func Collect(ctx context.Context, cfg *config.Config, s *store.Store, src model.
 	weights := scorer.WeightsFromConfig(cfg.Weights)
 	supported := src.SupportedMetrics()
 
-	for repoIdx, repoCfg := range cfg.Repositories {
-		repo := &model.Repository{
-			ProjectID:     project.ID,
-			URL:           repoCfg.URL,
-			Branch:        repoCfg.Branch,
-			GitopsRepoURL: repoCfg.GitopsRepoURL,
-		}
-		if err := s.CreateRepository(repo); err != nil {
-			return nil, fmt.Errorf("creating repository %s: %w", repoCfg.URL, err)
-		}
-
+	for repoIdx, repo := range repos {
 		onProgress(ProgressEvent{
-			RepositoryURL: repoCfg.URL,
+			RepositoryURL: repo.URL,
 			RepoIndex:     repoIdx + 1,
-			RepoTotal:     len(cfg.Repositories),
-			Message:       fmt.Sprintf("Collecting from %s (branch: %s)", repoCfg.URL, repoCfg.Branch),
+			RepoTotal:     len(repos),
+			Message:       fmt.Sprintf("Collecting from %s (branch: %s)", repo.URL, repo.Branch),
 		})
 
 		repoResult := RepositoryResult{
-			Repository: *repo,
+			Repository: repo,
 			Metrics:    make(map[model.MetricTypeName]float64),
 		}
 
-		metrics, err := src.Collect(ctx, *repo)
+		metrics, err := src.Collect(ctx, repo)
 		if err != nil {
 			repoResult.Errors = append(repoResult.Errors, fmt.Sprintf("collection failed: %v", err))
 			result.Repositories = append(result.Repositories, repoResult)
@@ -90,9 +72,9 @@ func Collect(ctx context.Context, cfg *config.Config, s *store.Store, src model.
 
 		for i, m := range metrics {
 			onProgress(ProgressEvent{
-				RepositoryURL: repoCfg.URL,
+				RepositoryURL: repo.URL,
 				RepoIndex:     repoIdx + 1,
-				RepoTotal:     len(cfg.Repositories),
+				RepoTotal:     len(repos),
 				MetricName:    string(m.Type),
 				MetricIndex:   i + 1,
 				MetricTotal:   len(supported),
@@ -135,9 +117,9 @@ func Collect(ctx context.Context, cfg *config.Config, s *store.Store, src model.
 		}
 
 		onProgress(ProgressEvent{
-			RepositoryURL: repoCfg.URL,
+			RepositoryURL: repo.URL,
 			RepoIndex:     repoIdx + 1,
-			RepoTotal:     len(cfg.Repositories),
+			RepoTotal:     len(repos),
 			Message:       fmt.Sprintf("Score: %.1f", repoResult.OverallScore),
 		})
 

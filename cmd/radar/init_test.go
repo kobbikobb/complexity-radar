@@ -239,3 +239,51 @@ func TestFindProjectNoProjects(t *testing.T) {
 		t.Fatal("expected error for no projects")
 	}
 }
+
+func TestFindOrCreateProjectCreatesNew(t *testing.T) {
+	s, err := store.New(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = s.Close() }()
+
+	p, err := findOrCreateProject(s, "new-project", "A new project")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if p.Name != "new-project" {
+		t.Errorf("expected project name 'new-project', got %q", p.Name)
+	}
+	if p.Description != "A new project" {
+		t.Errorf("expected description 'A new project', got %q", p.Description)
+	}
+	if p.ID == 0 {
+		t.Error("expected non-zero project ID")
+	}
+}
+
+func TestFindOrCreateProjectReturnsExisting(t *testing.T) {
+	s, err := store.New(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = s.Close() }()
+
+	existing := &model.Project{Name: "existing-project", Description: "original"}
+	if err := s.CreateProject(existing); err != nil {
+		t.Fatal(err)
+	}
+
+	p, err := findOrCreateProject(s, "existing-project", "updated description")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if p.ID != existing.ID {
+		t.Errorf("expected same project ID %d, got %d", existing.ID, p.ID)
+	}
+	if p.Description != "original" {
+		t.Errorf("expected original description, got %q", p.Description)
+	}
+}

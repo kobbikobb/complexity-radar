@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/kobbikobb/complexity-radar/internal/collector"
+	"github.com/kobbikobb/complexity-radar/internal/model"
 	"github.com/kobbikobb/complexity-radar/internal/report"
 	"github.com/kobbikobb/complexity-radar/internal/sources/github"
 	"github.com/kobbikobb/complexity-radar/internal/terminal"
@@ -38,7 +39,7 @@ func runScan(cmd *cobra.Command, args []string) error {
 	}
 	defer func() { _ = s.Close() }()
 
-	project, err := findProject(s, projectName)
+	project, err := findOrCreateProject(s, projectName, "")
 	if err != nil {
 		return err
 	}
@@ -48,9 +49,18 @@ func runScan(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	var repos []model.Repository
+	for _, repoCfg := range cfg.Repositories {
+		repo, err := s.FindOrCreateRepository(project.ID, repoCfg.URL, repoCfg.Branch)
+		if err != nil {
+			return fmt.Errorf("finding repository %s: %w", repoCfg.URL, err)
+		}
+		repos = append(repos, *repo)
+	}
+
 	src := github.NewSource()
 
-	result, err := collector.Collect(cmd.Context(), cfg, s, src, func(e collector.ProgressEvent) {
+	result, err := collector.Collect(cmd.Context(), cfg, s, project, repos, src, func(e collector.ProgressEvent) {
 		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), e.Message)
 	})
 	if err != nil {

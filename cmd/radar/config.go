@@ -16,6 +16,35 @@ func openStore(dbPath string) (*store.Store, error) {
 	return s, nil
 }
 
+// findOrCreateProject returns the existing project by name, or creates a new one.
+// When name is empty, returns the first project if any exist.
+func findOrCreateProject(s *store.Store, name, description string) (*model.Project, error) {
+	if name == "" {
+		projects, err := s.ListProjects()
+		if err != nil {
+			return nil, fmt.Errorf("listing projects: %w", err)
+		}
+		if len(projects) == 0 {
+			return nil, fmt.Errorf("no project configured. Run 'radar init' first")
+		}
+		return &projects[0], nil
+	}
+
+	p, err := s.GetProjectByName(name)
+	if err == nil {
+		return p, nil
+	}
+
+	p = &model.Project{
+		Name:        name,
+		Description: description,
+	}
+	if err := s.CreateProject(p); err != nil {
+		return nil, fmt.Errorf("creating project: %w", err)
+	}
+	return p, nil
+}
+
 func findProject(s *store.Store, name string) (*model.Project, error) {
 	projects, err := s.ListProjects()
 	if err != nil {
