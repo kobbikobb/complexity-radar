@@ -273,11 +273,14 @@ func TestScoreGrade(t *testing.T) {
 		{90.0, "A"},
 		{85.0, "B"},
 		{80.0, "B"},
-		{75.0, "C"},
+		{75.0, "B"},
 		{70.0, "C"},
-		{65.0, "D"},
-		{60.0, "D"},
-		{59.0, "F"},
+		{65.0, "C"},
+		{60.0, "C"},
+		{55.0, "D"},
+		{45.0, "D"},
+		{40.0, "D"},
+		{39.0, "F"},
 		{0.0, "F"},
 	}
 	for _, tt := range tests {
@@ -317,8 +320,8 @@ func TestFormatSampleReport(t *testing.T) {
 		t.Error("missing description")
 	}
 
-	// overall score with grade C (75.0)
-	if !strings.Contains(out, "OVERALL SCORE: 75.0 [C]") {
+	// overall score with grade B (75.0)
+	if !strings.Contains(out, "OVERALL SCORE: 75.0 [B]") {
 		t.Errorf("unexpected overall score line, output:\n%s", out)
 	}
 

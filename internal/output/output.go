@@ -39,11 +39,11 @@ func ScoreGrade(score float64) string {
 	switch {
 	case score >= 90:
 		return "A"
-	case score >= 80:
+	case score >= 75:
 		return "B"
-	case score >= 70:
-		return "C"
 	case score >= 60:
+		return "C"
+	case score >= 40:
 		return "D"
 	default:
 		return "F"

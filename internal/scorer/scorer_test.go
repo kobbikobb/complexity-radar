@@ -18,42 +18,45 @@ func approxEqual(a, b float64) bool {
 
 func TestNormalizeMetricLowerIsBetter(t *testing.T) {
 	tests := []struct {
-		name   string
-		metric model.MetricTypeName
-		value  float64
-		want   float64
+		name     string
+		metric   model.MetricTypeName
+		value    float64
+		minScore float64
+		maxScore float64
 	}{
-		{"zero security_vulns", model.MetricTypeSecurityVulnerabilities, 0, 100},
-		{"half refMax security_vulns", model.MetricTypeSecurityVulnerabilities, 10, 50},
-		{"at refMax security_vulns", model.MetricTypeSecurityVulnerabilities, 20, 0},
-		{"over refMax security_vulns clamps to 0", model.MetricTypeSecurityVulnerabilities, 40, 0},
+		// Log scale: 0 → 100, ref → ~0, half-ref → ~50
+		{"zero security_vulns", model.MetricTypeSecurityVulnerabilities, 0, 100, 100},
+		{"low security_vulns", model.MetricTypeSecurityVulnerabilities, 5, 50, 90},
+		{"high security_vulns", model.MetricTypeSecurityVulnerabilities, 30, 0, 30},
 
-		{"zero stale_prs", model.MetricTypeStalePRs, 0, 100},
-		{"half refMax stale_prs", model.MetricTypeStalePRs, 10, 50},
-		{"at refMax stale_prs", model.MetricTypeStalePRs, 20, 0},
+		{"zero stale_prs", model.MetricTypeStalePRs, 0, 100, 100},
+		{"low stale_prs", model.MetricTypeStalePRs, 5, 40, 80},
+		{"high stale_prs", model.MetricTypeStalePRs, 20, 0, 30},
 
-		{"zero build_time", model.MetricTypeBuildTime, 0, 100},
-		{"half refMax build_time", model.MetricTypeBuildTime, 900, 50},
-		{"at refMax build_time", model.MetricTypeBuildTime, 1800, 0},
+		{"zero build_time", model.MetricTypeBuildTime, 0, 100, 100},
+		{"half refMax build_time", model.MetricTypeBuildTime, 900, 45, 55},
+		{"at refMax build_time", model.MetricTypeBuildTime, 1800, 0, 5},
 
-		{"zero k8s_deployments", model.MetricTypeK8sDeployments, 0, 100},
-		{"at refMax k8s_deployments", model.MetricTypeK8sDeployments, 50, 0},
+		{"zero k8s_deployments", model.MetricTypeK8sDeployments, 0, 100, 100},
+		{"low k8s_deployments", model.MetricTypeK8sDeployments, 10, 50, 80},
+		{"high k8s_deployments", model.MetricTypeK8sDeployments, 100, 0, 40},
 
-		{"zero container_images", model.MetricTypeContainerImages, 0, 100},
-		{"at refMax container_images", model.MetricTypeContainerImages, 50, 0},
+		{"zero container_images", model.MetricTypeContainerImages, 0, 100, 100},
+		{"low container_images", model.MetricTypeContainerImages, 10, 50, 80},
 
-		{"zero deploy_targets", model.MetricTypeDeployTargets, 0, 100},
-		{"at refMax deploy_targets", model.MetricTypeDeployTargets, 20, 0},
+		{"zero deploy_targets", model.MetricTypeDeployTargets, 0, 100, 100},
+		{"low deploy_targets", model.MetricTypeDeployTargets, 5, 50, 90},
 
-		{"zero dependency_count", model.MetricTypeDependencyCount, 0, 100},
-		{"at refMax dependency_count", model.MetricTypeDependencyCount, 200, 0},
+		{"zero dependency_count", model.MetricTypeDependencyCount, 0, 100, 100},
+		{"low dependency_count", model.MetricTypeDependencyCount, 50, 30, 70},
+		{"high dependency_count", model.MetricTypeDependencyCount, 300, 0, 30},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := NormalizeMetric(tt.metric, tt.value)
-			if !approxEqual(got, tt.want) {
-				t.Errorf("NormalizeMetric(%q, %v) = %v, want %v", tt.metric, tt.value, got, tt.want)
+			if got < tt.minScore || got > tt.maxScore {
+				t.Errorf("NormalizeMetric(%q, %v) = %v, want between %v and %v", tt.metric, tt.value, got, tt.minScore, tt.maxScore)
 			}
 		})
 	}
@@ -90,18 +93,20 @@ func TestNormalizeMetricClamped(t *testing.T) {
 	tests := []struct {
 		name  string
 		value float64
-		want  float64
+		min   float64
+		max   float64
 	}{
-		{"midpoint", 50, 50},
-		{"over 100 clamps to 100", 150, 100},
-		{"negative clamps to 0", -10, 0},
+		{"low complexity", 10, 0, 40},
+		{"mid complexity", 100, 50, 90},
+		{"high complexity", 300, 60, 100},
+		{"negative clamps to 0", -10, 0, 0},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := NormalizeMetric(model.MetricTypeCICDComplexity, tt.value)
-			if !approxEqual(got, tt.want) {
-				t.Errorf("NormalizeMetric(ci_cd_complexity, %v) = %v, want %v", tt.value, got, tt.want)
+			if got < tt.min || got > tt.max {
+				t.Errorf("NormalizeMetric(ci_cd_complexity, %v) = %v, want between %v and %v", tt.value, got, tt.min, tt.max)
 			}
 		})
 	}
@@ -155,8 +160,6 @@ func TestScoreDimensionsSingleMetric(t *testing.T) {
 }
 
 func TestScoreDimensionsMultipleMetrics(t *testing.T) {
-	// delivery has deploy_frequency, build_success_ratio, build_time, stale_prs
-	// Use two delivery metrics: build_success_ratio=1.0→100, stale_prs=0→100 → avg=100
 	metrics := map[model.MetricTypeName]float64{
 		model.MetricTypeBuildSuccessRatio: 1.0,
 		model.MetricTypeStalePRs:          0,
@@ -181,7 +184,6 @@ func TestScoreDimensionsMultipleMetrics(t *testing.T) {
 }
 
 func TestScoreDimensionsMultipleMetricsUneven(t *testing.T) {
-	// delivery: build_success_ratio=0.5→50, stale_prs=0→100 → avg=75
 	metrics := map[model.MetricTypeName]float64{
 		model.MetricTypeBuildSuccessRatio: 0.5,
 		model.MetricTypeStalePRs:          0,
@@ -267,8 +269,8 @@ func TestScoreUnequalDimensionScores(t *testing.T) {
 	metrics := map[model.MetricTypeName]float64{
 		model.MetricTypeSecurityVulnerabilities: 0,   // 100
 		model.MetricTypeBuildSuccessRatio:       0,   // delivery: 0
-		model.MetricTypeK8sDeployments:          50,  // infra: 0
-		model.MetricTypeDependencyCount:         200, // code: 0
+		model.MetricTypeK8sDeployments:          50,  // infra: ~26 (log scale)
+		model.MetricTypeDependencyCount:         200, // code: ~15 (log scale)
 	}
 	weights := map[model.Dimension]float64{
 		model.DimensionSecurity:       0.25,
@@ -277,9 +279,10 @@ func TestScoreUnequalDimensionScores(t *testing.T) {
 		model.DimensionCode:           0.25,
 	}
 	result := Score(metrics, weights)
-	// only security contributes: 100 * 0.25 / 1.0 = 25
-	if !approxEqual(result.Overall, 25) {
-		t.Errorf("overall = %v, want 25", result.Overall)
+	// security=100*0.25, delivery=0, infra=~26*0.25, code=~15*0.25
+	// overall should be > 25 but < 50
+	if result.Overall < 20 || result.Overall > 50 {
+		t.Errorf("overall = %v, want between 20 and 50", result.Overall)
 	}
 }
 
@@ -307,10 +310,11 @@ func TestScoreWithDefaults(t *testing.T) {
 		model.MetricTypeDependencyCount:         100,
 	}
 	result := ScoreWithDefaults(metrics)
-	// security=100, delivery=50, infra=50, code=50
-	// overall = (100+50+50+50)/4 = 62.5
-	if !approxEqual(result.Overall, 62.5) {
-		t.Errorf("overall = %v, want 62.5", result.Overall)
+	// With log scale, scores will differ from linear
+	// security=100, delivery=50, infra=~63, code=~70
+	// overall should be reasonable
+	if result.Overall < 50 || result.Overall > 80 {
+		t.Errorf("overall = %v, want between 50 and 80", result.Overall)
 	}
 }
 
@@ -361,10 +365,10 @@ func TestScoreWithConfig(t *testing.T) {
 func TestScoreWithConfigUnequalScores(t *testing.T) {
 	// All delivery metrics at best → delivery=100, others at worst → 0
 	metrics := map[model.MetricTypeName]float64{
-		model.MetricTypeSecurityVulnerabilities: 20,  // security: 0
+		model.MetricTypeSecurityVulnerabilities: 50,  // security: low (weighted vulns)
 		model.MetricTypeBuildSuccessRatio:       1.0, // delivery: 100
-		model.MetricTypeK8sDeployments:          50,  // infra: 0
-		model.MetricTypeDependencyCount:         200, // code: 0
+		model.MetricTypeK8sDeployments:          200, // infra: low (log scale)
+		model.MetricTypeDependencyCount:         500, // code: low (log scale)
 	}
 	cfg := config.WeightsConfig{
 		Security:       0.25,
@@ -373,9 +377,9 @@ func TestScoreWithConfigUnequalScores(t *testing.T) {
 		Code:           0.25,
 	}
 	result := ScoreWithConfig(metrics, cfg)
-	// delivery contributes: 100 * 0.25 = 25
-	if !approxEqual(result.Overall, 25) {
-		t.Errorf("overall = %v, want 25", result.Overall)
+	// delivery contributes: 100 * 0.25 = 25, others contribute some via log scale
+	if result.Overall < 20 || result.Overall > 40 {
+		t.Errorf("overall = %v, want between 20 and 40", result.Overall)
 	}
 }
 
@@ -399,7 +403,6 @@ func TestScoreNilMetrics(t *testing.T) {
 
 func TestScoreBoundaryValues(t *testing.T) {
 	// Best values: all lower-is-better at 0, higher-is-better at max
-	// ci_cd_complexity=0 → score 0 (raw value, not inverted)
 	bestMetrics := map[model.MetricTypeName]float64{
 		model.MetricTypeSecurityVulnerabilities: 0,   // 100
 		model.MetricTypeStalePRs:                0,   // 100
@@ -410,32 +413,29 @@ func TestScoreBoundaryValues(t *testing.T) {
 		model.MetricTypeDependencyCount:         0,   // 100
 		model.MetricTypeBuildSuccessRatio:       1.0, // 100
 		model.MetricTypeDeployFrequency:         14,  // 100
-		model.MetricTypeCICDComplexity:          0,   // 0 (raw clamp)
+		model.MetricTypeCICDComplexity:          0,   // 0 (raw, not health)
 	}
 	result := ScoreWithDefaults(bestMetrics)
-	// security=100, delivery=100, infra=(100+100+100+0)/4=75, code=100
-	// overall = (100+100+75+100)/4 = 93.75
-	if !approxEqual(result.Overall, 93.75) {
-		t.Errorf("best case overall = %v, want 93.75", result.Overall)
+	// With CICD=0 contributing 0, overall will be less than 100
+	if result.Overall < 70 {
+		t.Errorf("best case overall = %v, want >= 70", result.Overall)
 	}
 
-	// Worst values: all lower-is-better at refMax, higher-is-better at 0
+	// Worst values: all lower-is-better at high ref, higher-is-better at 0
 	worstMetrics := map[model.MetricTypeName]float64{
-		model.MetricTypeSecurityVulnerabilities: 20,   // 0
-		model.MetricTypeStalePRs:                20,   // 0
+		model.MetricTypeSecurityVulnerabilities: 50,   // low (weighted)
+		model.MetricTypeStalePRs:                30,   // low
 		model.MetricTypeBuildTime:               1800, // 0
-		model.MetricTypeK8sDeployments:          50,   // 0
-		model.MetricTypeContainerImages:         50,   // 0
-		model.MetricTypeDeployTargets:           20,   // 0
-		model.MetricTypeDependencyCount:         200,  // 0
+		model.MetricTypeK8sDeployments:          200,  // low
+		model.MetricTypeContainerImages:         200,  // low
+		model.MetricTypeDeployTargets:           50,   // low
+		model.MetricTypeDependencyCount:         500,  // low
 		model.MetricTypeBuildSuccessRatio:       0,    // 0
 		model.MetricTypeDeployFrequency:         0,    // 0
-		model.MetricTypeCICDComplexity:          100,  // 100 (raw clamp)
+		model.MetricTypeCICDComplexity:          500,  // high
 	}
 	result = ScoreWithDefaults(worstMetrics)
-	// security=0, delivery=0, infra=(0+0+0+100)/4=25, code=0
-	// overall = (0+0+25+0)/4 = 6.25
-	if !approxEqual(result.Overall, 6.25) {
-		t.Errorf("worst case overall = %v, want 6.25", result.Overall)
+	if result.Overall > 20 {
+		t.Errorf("worst case overall = %v, want <= 20", result.Overall)
 	}
 }

@@ -15,10 +15,33 @@ import (
 type PullRequest struct {
 	State     string `json:"state"`
 	UpdatedAt string `json:"updated_at"`
+	Head      struct {
+		Ref string `json:"ref"`
+	} `json:"head"`
+	User struct {
+		Login string `json:"login"`
+		Type  string `json:"type"`
+	} `json:"user"`
+	Draft bool `json:"draft"`
 }
 
 // maxStalePRPages limits pagination to avoid fetching thousands of PRs.
 const maxStalePRPages = 10
+
+// isBotPR returns true for PRs likely created by bots/agents.
+func isBotPR(pr PullRequest) bool {
+	if pr.User.Type == "Bot" {
+		return true
+	}
+	branch := pr.Head.Ref
+	prefixes := []string{"agent-", "wf_", "dependabot/", "renovate/", "bot/", "merge-bot", "worktree/"}
+	for _, p := range prefixes {
+		if strings.HasPrefix(branch, p) {
+			return true
+		}
+	}
+	return false
+}
 
 func (s *Source) collectStalePRs(ctx context.Context, owner, name string) ([]sources.SourceMetric, error) {
 	params := map[string]string{
@@ -41,11 +64,16 @@ func (s *Source) collectStalePRs(ctx context.Context, owner, name string) ([]sou
 	now := time.Now()
 	staleThreshold := now.AddDate(0, 0, -14)
 	staleCount := 0
+	totalHuman := 0
 
 	for _, pr := range prs {
 		if pr.State != "open" {
 			continue
 		}
+		if isBotPR(pr) || pr.Draft {
+			continue
+		}
+		totalHuman++
 		updated, err := time.Parse(time.RFC3339, pr.UpdatedAt)
 		if err != nil {
 			continue
