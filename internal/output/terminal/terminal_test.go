@@ -78,11 +78,8 @@ func TestFormatWithOverallScore(t *testing.T) {
 	report.OverallScore = 85.5
 	out := f.Format(report)
 
-	if !strings.Contains(out, "OVERALL SCORE: 85.5") {
-		t.Errorf("expected 85.5 in output, got:\n%s", out)
-	}
-	if !strings.Contains(out, "B") {
-		t.Error("expected grade B for score 85.5")
+	if !strings.Contains(out, "OVERALL SCORE: 85.5 [B]") {
+		t.Errorf("expected 85.5 [B] in output, got:\n%s", out)
 	}
 }
 
@@ -117,7 +114,7 @@ func TestFormatWithMetrics(t *testing.T) {
 	if !strings.Contains(out, "Deploy Frequency") {
 		t.Error("missing deploy frequency metric name")
 	}
-	// ratio unit → %
+	// per_week unit → /week
 	if !strings.Contains(out, "/week") {
 		t.Errorf("expected /week unit, output:\n%s", out)
 	}
@@ -206,8 +203,9 @@ func TestFormatMetricName(t *testing.T) {
 		{model.MetricTypeSecurityVulnerabilities, "Security Vulnerabilities"},
 		{model.MetricTypeBuildSuccessRatio, "Build Success Ratio"},
 		{model.MetricTypeDependencyCount, "Dependency Count"},
-		{model.MetricTypeCICDComplexity, "Ci Cd Complexity"},
-		{model.MetricTypeStalePRs, "Stale Prs"},
+		{model.MetricTypeCICDComplexity, "CI/CD Complexity"},
+		{model.MetricTypeStalePRs, "Stale PRs"},
+		{model.MetricTypeK8sDeployments, "K8s Deployments"},
 	}
 	for _, tt := range tests {
 		t.Run(string(tt.input), func(t *testing.T) {
@@ -357,5 +355,56 @@ func TestFormatSampleReport(t *testing.T) {
 	// no errors section
 	if strings.Contains(out, "Errors:") {
 		t.Error("should not have errors section")
+	}
+}
+
+// --- stripANSI tests ---
+
+func TestStripANSI(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"no escape", "hello", "hello"},
+		{"empty", "", ""},
+		{"green", "\033[32m85.0\033[0m", "85.0"},
+		{"yellow", "\033[33m65.0\033[0m", "65.0"},
+		{"red", "\033[31m40.0\033[0m", "40.0"},
+		{"nested", "\033[32m\033[1m85.0\033[0m\033[0m", "85.0"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := stripANSI(tt.input)
+			if got != tt.want {
+				t.Errorf("stripANSI(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+// --- colorScore boundary tests ---
+
+func TestColorScoreBoundaries(t *testing.T) {
+	tests := []struct {
+		name      string
+		score     float64
+		wantColor string
+	}{
+		{"90 is green", 90.0, "\033[32m"},
+		{"80 is green", 80.0, "\033[32m"},
+		{"79.9 is yellow", 79.9, "\033[33m"},
+		{"60 is yellow", 60.0, "\033[33m"},
+		{"59.9 is red", 59.9, "\033[31m"},
+		{"0 is red", 0.0, "\033[31m"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := New()
+			got := f.colorScore(tt.score)
+			if !strings.Contains(got, tt.wantColor) {
+				t.Errorf("colorScore(%v) = %q, want color %s", tt.score, got, tt.wantColor)
+			}
+		})
 	}
 }
