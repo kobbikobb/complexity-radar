@@ -49,8 +49,7 @@ func runReport(cmd *cobra.Command, args []string) error {
 	formatter := terminal.New()
 	formatter.UseColor = true
 
-	builder := report.NewBuilder()
-	reports, err := builder.BuildFromDB(s, *project, cfg)
+	reports, err := report.BuildFromDB(s, *project, cfg, cmd.ErrOrStderr())
 	if err != nil {
 		return fmt.Errorf("building report: %w", err)
 	}

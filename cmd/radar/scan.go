@@ -61,8 +61,7 @@ func runScan(cmd *cobra.Command, args []string) error {
 	formatter := terminal.New()
 	formatter.UseColor = true
 
-	builder := report.NewBuilder()
-	reports := builder.BuildFromResult(*result, cfg)
+	reports := report.BuildFromResult(*result, cfg)
 	for _, r := range reports {
 		fmt.Println(formatter.Format(r))
 	}

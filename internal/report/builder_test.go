@@ -1,6 +1,8 @@
 package report
 
 import (
+	"bytes"
+	"strings"
 	"testing"
 	"time"
 
@@ -33,8 +35,6 @@ func testConfig() *config.Config {
 }
 
 func TestBuildFromResultProducesReports(t *testing.T) {
-	builder := NewBuilder()
-
 	result := collector.CollectionResult{
 		Project: model.Project{
 			Name:        "TestProject",
@@ -59,7 +59,7 @@ func TestBuildFromResultProducesReports(t *testing.T) {
 		},
 	}
 
-	reports := builder.BuildFromResult(result, testConfig())
+	reports := BuildFromResult(result, testConfig())
 
 	if len(reports) != 1 {
 		t.Fatalf("got %d reports, want 1", len(reports))
@@ -84,8 +84,6 @@ func TestBuildFromResultProducesReports(t *testing.T) {
 }
 
 func TestBuildFromResultDimensionWeights(t *testing.T) {
-	builder := NewBuilder()
-
 	result := collector.CollectionResult{
 		Project: model.Project{Name: "Test"},
 		Repositories: []collector.RepositoryResult{
@@ -99,7 +97,7 @@ func TestBuildFromResultDimensionWeights(t *testing.T) {
 		},
 	}
 
-	reports := builder.BuildFromResult(result, testConfig())
+	reports := BuildFromResult(result, testConfig())
 	dims := reports[0].Dimensions
 
 	for _, d := range dims {
@@ -117,8 +115,6 @@ func TestBuildFromResultDimensionWeights(t *testing.T) {
 }
 
 func TestBuildFromResultMultipleRepositories(t *testing.T) {
-	builder := NewBuilder()
-
 	result := collector.CollectionResult{
 		Project: model.Project{Name: "Multi"},
 		Repositories: []collector.RepositoryResult{
@@ -135,15 +131,13 @@ func TestBuildFromResultMultipleRepositories(t *testing.T) {
 		},
 	}
 
-	reports := builder.BuildFromResult(result, testConfig())
+	reports := BuildFromResult(result, testConfig())
 	if len(reports) != 2 {
 		t.Fatalf("got %d reports, want 2", len(reports))
 	}
 }
 
 func TestBuildFromResultNoMetrics(t *testing.T) {
-	builder := NewBuilder()
-
 	result := collector.CollectionResult{
 		Project: model.Project{Name: "Empty"},
 		Repositories: []collector.RepositoryResult{
@@ -155,12 +149,47 @@ func TestBuildFromResultNoMetrics(t *testing.T) {
 		},
 	}
 
-	reports := builder.BuildFromResult(result, testConfig())
+	reports := BuildFromResult(result, testConfig())
 	if len(reports) != 1 {
 		t.Fatalf("got %d reports, want 1", len(reports))
 	}
 	if len(reports[0].Metrics) != 0 {
 		t.Errorf("got %d metrics, want 0", len(reports[0].Metrics))
+	}
+}
+
+func TestBuildFromResultSkipsUnknownMetrics(t *testing.T) {
+	result := collector.CollectionResult{
+		Project: model.Project{Name: "UnknownMetric"},
+		Repositories: []collector.RepositoryResult{
+			{
+				Repository: model.Repository{CreatedAt: time.Now()},
+				Metrics: map[model.MetricTypeName]float64{
+					model.MetricTypeSecurityVulnerabilities: 3,
+					"totally_unknown_metric":                42,
+				},
+				Dimensions: []scorer.DimensionResult{
+					{Dimension: model.DimensionSecurity, Score: 80, MetricCount: 1},
+				},
+			},
+		},
+	}
+
+	reports := BuildFromResult(result, testConfig())
+
+	if len(reports) != 1 {
+		t.Fatalf("got %d reports, want 1", len(reports))
+	}
+
+	metrics := reports[0].Metrics
+	if len(metrics) != 1 {
+		t.Fatalf("got %d metrics, want 1 (unknown should be skipped)", len(metrics))
+	}
+	if metrics[0].Name != model.MetricTypeSecurityVulnerabilities {
+		t.Errorf("metric name = %q, want %q", metrics[0].Name, model.MetricTypeSecurityVulnerabilities)
+	}
+	if metrics[0].Dimension == "" {
+		t.Error("known metric should have a non-empty dimension")
 	}
 }
 
@@ -187,8 +216,7 @@ func TestBuildFromDBProducesReports(t *testing.T) {
 		t.Fatalf("CreateMetric: %v", err)
 	}
 
-	builder := NewBuilder()
-	reports, err := builder.BuildFromDB(s, *p, testConfig())
+	reports, err := BuildFromDB(s, *p, testConfig(), nil)
 	if err != nil {
 		t.Fatalf("BuildFromDB: %v", err)
 	}
@@ -228,8 +256,7 @@ func TestBuildFromDBSkipsEmptyRepositories(t *testing.T) {
 		t.Fatalf("CreateRepository: %v", err)
 	}
 
-	builder := NewBuilder()
-	reports, err := builder.BuildFromDB(s, *p, testConfig())
+	reports, err := BuildFromDB(s, *p, testConfig(), nil)
 	if err != nil {
 		t.Fatalf("BuildFromDB: %v", err)
 	}
@@ -272,8 +299,7 @@ func TestBuildFromDBWithMultipleMetrics(t *testing.T) {
 		}
 	}
 
-	builder := NewBuilder()
-	reports, err := builder.BuildFromDB(s, *p, testConfig())
+	reports, err := BuildFromDB(s, *p, testConfig(), nil)
 	if err != nil {
 		t.Fatalf("BuildFromDB: %v", err)
 	}
@@ -301,8 +327,7 @@ func TestBuildFromDBNoRepositories(t *testing.T) {
 		t.Fatalf("CreateProject: %v", err)
 	}
 
-	builder := NewBuilder()
-	reports, err := builder.BuildFromDB(s, *p, testConfig())
+	reports, err := BuildFromDB(s, *p, testConfig(), nil)
 	if err != nil {
 		t.Fatalf("BuildFromDB: %v", err)
 	}
@@ -311,3 +336,90 @@ func TestBuildFromDBNoRepositories(t *testing.T) {
 		t.Fatalf("got %d reports, want 0", len(reports))
 	}
 }
+
+func TestBuildFromDBPerRepoWarning(t *testing.T) {
+	s := newTestStore(t)
+
+	p := &model.Project{Name: "WarnTest"}
+	if err := s.CreateProject(p); err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+
+	r := &model.Repository{ProjectID: p.ID, URL: "github.com/org/warn", Branch: "main"}
+	if err := s.CreateRepository(r); err != nil {
+		t.Fatalf("CreateRepository: %v", err)
+	}
+
+	var warnBuf bytes.Buffer
+	reports, err := BuildFromDB(s, *p, testConfig(), &warnBuf)
+	if err != nil {
+		t.Fatalf("BuildFromDB: %v", err)
+	}
+
+	if len(reports) != 0 {
+		t.Fatalf("got %d reports, want 0", len(reports))
+	}
+
+	warning := warnBuf.String()
+	if !strings.Contains(warning, "github.com/org/warn") {
+		t.Errorf("warning should mention repo URL, got: %q", warning)
+	}
+	if !strings.Contains(warning, "No metrics collected") {
+		t.Errorf("warning should say 'No metrics collected', got: %q", warning)
+	}
+}
+
+func TestBuildFromDBListRepositoriesError(t *testing.T) {
+	ms := &failingStore{listErr: true}
+	_, err := BuildFromDB(ms, model.Project{ID: 1}, testConfig(), nil)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "listing repositories") {
+		t.Errorf("error = %q, want it to contain 'listing repositories'", err.Error())
+	}
+}
+
+func TestBuildFromDBGetMetricsError(t *testing.T) {
+	ms := &failingStore{metricsErr: true}
+	_, err := BuildFromDB(ms, model.Project{ID: 1}, testConfig(), nil)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "getting metrics for") {
+		t.Errorf("error = %q, want it to contain 'getting metrics for'", err.Error())
+	}
+}
+
+type failingStore struct {
+	listErr    bool
+	metricsErr bool
+}
+
+func (f *failingStore) GetMetricTypeByName(_ model.MetricTypeName) (*model.MetricType, error) {
+	return nil, nil
+}
+
+func (f *failingStore) GetMetricTypeByID(_ int64) (*model.MetricType, error) {
+	return nil, nil
+}
+
+func (f *failingStore) ListRepositories(_ int64) ([]model.Repository, error) {
+	if f.listErr {
+		return nil, &testError{"db connection failed"}
+	}
+	return []model.Repository{{ID: 1, URL: "github.com/org/repo"}}, nil
+}
+
+func (f *failingStore) GetMetricsByRepository(_ int64) ([]model.Metric, error) {
+	if f.metricsErr {
+		return nil, &testError{"query failed"}
+	}
+	return nil, nil
+}
+
+type testError struct {
+	msg string
+}
+
+func (e *testError) Error() string { return e.msg }

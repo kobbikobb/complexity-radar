@@ -1,11 +1,14 @@
 package report
 
 import (
+	"fmt"
+	"io"
+
 	"github.com/kobbikobb/complexity-radar/internal/collector"
 	"github.com/kobbikobb/complexity-radar/internal/config"
 	"github.com/kobbikobb/complexity-radar/internal/model"
-	"github.com/kobbikobb/complexity-radar/internal/terminal"
 	"github.com/kobbikobb/complexity-radar/internal/scorer"
+	"github.com/kobbikobb/complexity-radar/internal/terminal"
 )
 
 type Store interface {
@@ -15,23 +18,21 @@ type Store interface {
 	GetMetricsByRepository(repoID int64) ([]model.Metric, error)
 }
 
-type Builder struct{}
-
-func NewBuilder() *Builder {
-	return &Builder{}
-}
-
-func (b *Builder) BuildFromResult(result collector.CollectionResult, cfg *config.Config) []terminal.Report {
+func BuildFromResult(result collector.CollectionResult, cfg *config.Config) []terminal.Report {
 	reports := make([]terminal.Report, 0, len(result.Repositories))
 	for _, repoResult := range result.Repositories {
 		dimReports := buildDimensionReports(repoResult.Dimensions, cfg.Weights)
 
 		metricReports := make([]terminal.MetricReport, 0, len(repoResult.Metrics))
 		for name, raw := range repoResult.Metrics {
+			dim := metricDimension(name)
+			if dim == "" {
+				continue
+			}
 			normalized := scorer.NormalizeMetric(name, raw)
 			metricReports = append(metricReports, terminal.MetricReport{
 				Name:       name,
-				Dimension:  metricDimension(name),
+				Dimension:  dim,
 				RawValue:   raw,
 				Normalized: normalized,
 				Unit:       metricUnit(name),
@@ -50,21 +51,24 @@ func (b *Builder) BuildFromResult(result collector.CollectionResult, cfg *config
 	return reports
 }
 
-func (b *Builder) BuildFromDB(store Store, project model.Project, cfg *config.Config) ([]terminal.Report, error) {
+func BuildFromDB(store Store, project model.Project, cfg *config.Config, warn io.Writer) ([]terminal.Report, error) {
 	weights := scorer.WeightsFromConfig(cfg.Weights)
 
 	repos, err := store.ListRepositories(project.ID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("listing repositories: %w", err)
 	}
 
 	var reports []terminal.Report
 	for _, repo := range repos {
 		metrics, err := store.GetMetricsByRepository(repo.ID)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("getting metrics for %s: %w", repo.URL, err)
 		}
 		if len(metrics) == 0 {
+			if warn != nil {
+				_, _ = fmt.Fprintf(warn, "No metrics collected for %s. Run 'radar collect' first.\n", repo.URL)
+			}
 			continue
 		}
 
