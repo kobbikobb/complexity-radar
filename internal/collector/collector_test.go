@@ -35,7 +35,7 @@ func TestCollect(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 
 	cfg := &config.Config{
 		Project: config.ProjectConfig{
@@ -93,7 +93,7 @@ func TestCollectWithMultipleRepos(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 
 	cfg := &config.Config{
 		Project: config.ProjectConfig{
@@ -127,7 +127,7 @@ func TestCollectWithSourceError(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 
 	cfg := &config.Config{
 		Project: config.ProjectConfig{

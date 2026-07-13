@@ -64,7 +64,7 @@ func runScan(cmd *cobra.Command, args []string) error {
 	for _, repoResult := range result.Repositories {
 		if len(repoResult.Errors) > 0 {
 			for _, e := range repoResult.Errors {
-				fmt.Fprintf(cmd.OutOrStderr(), "  Warning: %s\n", e)
+				_, _ = fmt.Fprintf(cmd.OutOrStderr(), "  Warning: %s\n", e)
 			}
 		}
 
