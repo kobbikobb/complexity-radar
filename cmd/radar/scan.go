@@ -51,20 +51,20 @@ func runScan(cmd *cobra.Command, args []string) error {
 
 	src := github.NewSource()
 
-	fmt.Fprintln(cmd.OutOrStdout(), "Collecting data...")
+	_, _ = fmt.Fprintln(cmd.OutOrStdout(), "Collecting data...")
 	result, err := collector.Collect(cmd.Context(), cfg, s, src)
 	if err != nil {
 		return fmt.Errorf("collecting: %w", err)
 	}
 
-	fmt.Fprintln(cmd.OutOrStdout(), "Generating report...")
+	_, _ = fmt.Fprintln(cmd.OutOrStdout(), "Generating report...")
 	formatter := terminal.New()
 	formatter.UseColor = true
 
 	for _, repoResult := range result.Repositories {
 		if len(repoResult.Errors) > 0 {
 			for _, e := range repoResult.Errors {
-				fmt.Fprintf(cmd.ErrOrStderr(), "  Warning: %s\n", e)
+				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "  Warning: %s\n", e)
 			}
 		}
 
@@ -82,7 +82,7 @@ func runScan(cmd *cobra.Command, args []string) error {
 		for name, raw := range repoResult.Metrics {
 			mt, err := s.GetMetricTypeByName(name)
 			if err != nil {
-				fmt.Fprintf(cmd.ErrOrStderr(), "  Warning: unknown metric %s, skipping\n", name)
+				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "  Warning: unknown metric %s, skipping\n", name)
 				continue
 			}
 			normalized := scorer.NormalizeMetric(name, raw)

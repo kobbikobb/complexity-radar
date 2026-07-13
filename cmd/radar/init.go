@@ -51,8 +51,8 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Fprintf(cmd.OutOrStdout(), "\nConfiguration saved to %s\n", dbPath)
-	fmt.Fprintln(cmd.OutOrStdout(), "Run 'radar scan' to analyze your project.")
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "\nConfiguration saved to %s\n", dbPath)
+	_, _ = fmt.Fprintln(cmd.OutOrStdout(), "Run 'radar scan' to analyze your project.")
 
 	return nil
 }

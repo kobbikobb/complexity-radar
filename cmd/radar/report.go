@@ -64,7 +64,7 @@ func runReport(cmd *cobra.Command, args []string) error {
 		}
 
 		if len(metrics) == 0 {
-			fmt.Fprintf(cmd.OutOrStdout(), "No metrics collected for %s. Run 'radar collect' first.\n", repo.URL)
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "No metrics collected for %s. Run 'radar collect' first.\n", repo.URL)
 			continue
 		}
 
@@ -72,7 +72,7 @@ func runReport(cmd *cobra.Command, args []string) error {
 		for _, m := range metrics {
 			mt, err := s.GetMetricTypeByID(m.MetricTypeID)
 			if err != nil {
-				fmt.Fprintf(cmd.ErrOrStderr(), "  Warning: unknown metric type %d, skipping\n", m.MetricTypeID)
+				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "  Warning: unknown metric type %d, skipping\n", m.MetricTypeID)
 				continue
 			}
 			rawMetrics[mt.Name] = m.Value

@@ -53,20 +53,20 @@ func runCollect(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("collecting: %w", err)
 	}
 
-	fmt.Fprintf(cmd.OutOrStdout(), "Project: %s\n", result.Project.Name)
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Project: %s\n", result.Project.Name)
 	for _, r := range result.Repositories {
-		fmt.Fprintf(cmd.OutOrStdout(), "\nRepository: %s (branch: %s)\n", r.Repository.URL, r.Repository.Branch)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "\nRepository: %s (branch: %s)\n", r.Repository.URL, r.Repository.Branch)
 		if len(r.Errors) > 0 {
 			for _, e := range r.Errors {
-				fmt.Fprintf(cmd.ErrOrStderr(), "  Error: %s\n", e)
+				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "  Error: %s\n", e)
 			}
 		}
-		fmt.Fprintf(cmd.OutOrStdout(), "  Metrics collected: %d\n", len(r.Metrics))
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "  Metrics collected: %d\n", len(r.Metrics))
 		for _, d := range r.Dimensions {
-			fmt.Fprintf(cmd.OutOrStdout(), "  %s: %.1f\n", d.Dimension, d.Score)
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "  %s: %.1f\n", d.Dimension, d.Score)
 		}
 	}
 
-	fmt.Fprintf(cmd.OutOrStdout(), "\nCollected successfully.\n")
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "\nCollected successfully.\n")
 	return nil
 }
