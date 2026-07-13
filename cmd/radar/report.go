@@ -3,8 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/kobbikobb/complexity-radar/internal/model"
-	"github.com/kobbikobb/complexity-radar/internal/scorer"
+	"github.com/kobbikobb/complexity-radar/internal/report"
 	"github.com/kobbikobb/complexity-radar/internal/terminal"
 	"github.com/spf13/cobra"
 )
@@ -47,74 +46,21 @@ func runReport(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	weights := scorer.WeightsFromConfig(cfg.Weights)
 	formatter := terminal.New()
 	formatter.UseColor = true
 
-	repos, err := s.ListRepositories(project.ID)
+	builder := report.NewBuilder()
+	reports, err := builder.BuildFromDB(s, *project, cfg)
 	if err != nil {
-		return fmt.Errorf("listing repositories: %w", err)
+		return fmt.Errorf("building report: %w", err)
 	}
 
-	for _, repo := range repos {
-		metrics, err := s.GetMetricsByRepository(repo.ID)
-		if err != nil {
-			return fmt.Errorf("getting metrics for %s: %w", repo.URL, err)
-		}
+	if len(reports) == 0 {
+		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "No metrics collected. Run 'radar collect' first.\n")
+	}
 
-		if len(metrics) == 0 {
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "No metrics collected for %s. Run 'radar collect' first.\n", repo.URL)
-			continue
-		}
-
-		rawMetrics := make(map[model.MetricTypeName]float64)
-		for _, m := range metrics {
-			mt, err := s.GetMetricTypeByID(m.MetricTypeID)
-			if err != nil {
-				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "  Warning: unknown metric type %d, skipping\n", m.MetricTypeID)
-				continue
-			}
-			rawMetrics[mt.Name] = m.Value
-		}
-
-		scoreResult := scorer.Score(rawMetrics, weights)
-
-		dimReports := make([]terminal.DimensionReport, len(scoreResult.Dimensions))
-		for i, d := range scoreResult.Dimensions {
-			dr := terminal.DimensionReport{
-				Dimension:   d.Dimension,
-				Score:       d.Score,
-				Weight:      cfg.Weights.Weight(string(d.Dimension)) * 100,
-				MetricCount: d.MetricCount,
-			}
-			if d.Dimension == model.DimensionSecurity {
-				dr.Breakdown = terminal.SecurityBreakdown(rawMetrics)
-			}
-			dimReports[i] = dr
-		}
-
-		metricReports := make([]terminal.MetricReport, 0, len(rawMetrics))
-		for name, raw := range rawMetrics {
-			mt, _ := s.GetMetricTypeByName(name)
-			normalized := scorer.NormalizeMetric(name, raw)
-			metricReports = append(metricReports, terminal.MetricReport{
-				Name:       name,
-				Dimension:  mt.Dimension,
-				RawValue:   raw,
-				Normalized: normalized,
-				Unit:       mt.Unit,
-			})
-		}
-
-		report := terminal.Report{
-			ProjectName:        project.Name,
-			ProjectDescription: project.Description,
-			OverallScore:       scoreResult.Overall,
-			Dimensions:         dimReports,
-			Metrics:            metricReports,
-		}
-
-		fmt.Println(formatter.Format(report))
+	for _, r := range reports {
+		fmt.Println(formatter.Format(r))
 	}
 
 	return nil
