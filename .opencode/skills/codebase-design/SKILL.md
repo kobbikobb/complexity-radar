@@ -102,6 +102,55 @@ Good interfaces make testing natural:
 - An **Adapter** sits at a **Seam** and satisfies the **Interface**.
 - **Depth** produces **Leverage** for callers and **Locality** for maintainers.
 
+## Examples from this codebase
+
+### Deep module: `Source` interface
+
+```go
+// Small interface — callers only need to know three things:
+type Source interface {
+    Name() string
+    Collect(ctx context.Context, repo model.Repository) ([]SourceMetric, error)
+    SupportedMetrics() []model.MetricTypeName
+}
+```
+
+The GitHub implementation hides complex API calls, URL parsing, workflow run fetching, and metric normalization behind this small surface. A test can swap in a mock `APIClient` without touching any caller code — that's **depth-as-leverage**.
+
+### Shallow module: `TerminalFormatter`
+
+```go
+type TerminalFormatter struct { UseColor bool }
+func (f *TerminalFormatter) Format(report output.Report) string { ... }
+```
+
+This module is shallow — its interface (`Format`) is nearly as complex as its implementation (formatting logic). But that's acceptable here: the formatting logic has no hidden complexity worth hiding, and the interface is already minimal (one method). Not every module needs to be deep — only those that would benefit from hiding complexity.
+
+### Internal seam vs external seam
+
+The `Source` interface is an **external seam** — it's where different adapters (GitHub, future Jira) plug in. The `APIClient` interface inside the GitHub source is an **internal seam** — it's private to the implementation and used only by its own tests:
+
+```go
+// External seam — where adapters plug in
+type Source interface { ... }
+
+// Internal seam — hidden inside GitHub source, used for testing
+type APIClient interface {
+    Get(ctx context.Context, endpoint string) ([]byte, error)
+    GetWithParams(ctx context.Context, endpoint string, params map[string]string) ([]byte, error)
+}
+```
+
+Two adapters exist at the external seam (`Source`): the real GitHub implementation and any test mock. One adapter exists at the internal seam (`APIClient`): the real `gh` client and test fakes. Both seams earn their keep because there are two adapters at each.
+
+### Deletion test applied
+
+If you delete the `collector` module, complexity reappears across CLI commands — project creation, repository iteration, metric storage, scoring orchestration. The collector is earning its keep.
+
+If you delete the `normalize` package inside `scorer`, the normalization logic would have to be duplicated across every dimension calculation. That's concentration — also earning its keep.
+
+If you delete the `formatMetricName` function, callers would need to implement their own string formatting. But the function is a simple utility, not a module — the deletion test applies to modules, not functions.
+
 ## Rejected framings
 
 - **Depth as ratio of implementation-lines to interface-lines** (Ousterhout): rewards padding the implementation. We use depth-as-leverage instead.
@@ -110,5 +159,5 @@ Good interfaces make testing natural:
 
 ## Going deeper
 
-- **Deepening a cluster given its dependencies** — see [DEEPENING.md](DEEPENING.md): dependency categories, seam discipline, and replace-don't-layer testing.
-- **Exploring alternative interfaces** — see [DESIGN-IT-TWICE.md](DESIGN-IT-TWICE.md): spin up parallel sub-agents to design the interface several radically different ways, then compare on depth, locality, and seam placement.
+- **Deepening a cluster given its dependencies** — dependency categories, seam discipline, and replace-don't-layer testing.
+- **Exploring alternative interfaces** — spin up parallel sub-agents to design the interface several radically different ways, then compare on depth, locality, and seam placement.
