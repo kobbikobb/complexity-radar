@@ -64,7 +64,6 @@ func (s *Source) collectStalePRs(ctx context.Context, owner, name string) ([]sou
 	now := time.Now()
 	staleThreshold := now.AddDate(0, 0, -14)
 	staleCount := 0
-	totalHuman := 0
 
 	for _, pr := range prs {
 		if pr.State != "open" {
@@ -73,7 +72,6 @@ func (s *Source) collectStalePRs(ctx context.Context, owner, name string) ([]sou
 		if isBotPR(pr) || pr.Draft {
 			continue
 		}
-		totalHuman++
 		updated, err := time.Parse(time.RFC3339, pr.UpdatedAt)
 		if err != nil {
 			continue
