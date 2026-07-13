@@ -9,7 +9,7 @@ import (
 	"github.com/kobbikobb/complexity-radar/internal/store"
 )
 
-func TestPrompt(t *testing.T) {
+func TestPromptWithInput(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    string
@@ -61,7 +61,7 @@ func TestPrompt(t *testing.T) {
 	}
 }
 
-func TestPromptEmptyRequired(t *testing.T) {
+func TestPromptReturnsEmptyWhenNoDefault(t *testing.T) {
 	reader := bufio.NewReader(strings.NewReader("\n"))
 	got, err := prompt(reader, "Project name", "")
 	if err != nil {
@@ -69,6 +69,23 @@ func TestPromptEmptyRequired(t *testing.T) {
 	}
 	if got != "" {
 		t.Errorf("prompt() = %q, want empty string", got)
+	}
+}
+
+func TestPromptProjectRequiresName(t *testing.T) {
+	s, err := store.New(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = s.Close() }()
+
+	reader := bufio.NewReader(strings.NewReader("\n"))
+	_, err = promptProject(reader, s)
+	if err == nil {
+		t.Fatal("expected error for empty project name")
+	}
+	if !strings.Contains(err.Error(), "project name is required") {
+		t.Errorf("unexpected error: %v", err)
 	}
 }
 
@@ -139,5 +156,85 @@ func TestBuildConfigFromDBNoRepos(t *testing.T) {
 	_, err = buildConfigFromDB(s, project)
 	if err == nil {
 		t.Fatal("expected error for no repositories")
+	}
+}
+
+func TestIsValidRepoURL(t *testing.T) {
+	tests := []struct {
+		url  string
+		want bool
+	}{
+		{"github.com/org/repo", true},
+		{"gitlab.com/group/project", true},
+		{"not-a-url", false},
+		{"", false},
+		{"  ", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.url, func(t *testing.T) {
+			got := isValidRepoURL(tt.url)
+			if got != tt.want {
+				t.Errorf("isValidRepoURL(%q) = %v, want %v", tt.url, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestFindProjectByName(t *testing.T) {
+	s, err := store.New(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = s.Close() }()
+
+	p1 := &model.Project{Name: "project-a"}
+	if err := s.CreateProject(p1); err != nil {
+		t.Fatal(err)
+	}
+
+	p2 := &model.Project{Name: "project-b"}
+	if err := s.CreateProject(p2); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := findProject(s, "project-b")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got.Name != "project-b" {
+		t.Errorf("expected project 'project-b', got %q", got.Name)
+	}
+}
+
+func TestFindProjectNotFound(t *testing.T) {
+	s, err := store.New(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = s.Close() }()
+
+	p := &model.Project{Name: "existing"}
+	if err := s.CreateProject(p); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = findProject(s, "nonexistent")
+	if err == nil {
+		t.Fatal("expected error for nonexistent project")
+	}
+}
+
+func TestFindProjectNoProjects(t *testing.T) {
+	s, err := store.New(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = s.Close() }()
+
+	_, err = findProject(s, "")
+	if err == nil {
+		t.Fatal("expected error for no projects")
 	}
 }

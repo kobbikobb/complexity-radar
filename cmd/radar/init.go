@@ -18,15 +18,24 @@ var initCmd = &cobra.Command{
 
 Creates a project and repository configuration in the local database.
 
+Running 'radar init' again will create a new project. Use --db to specify
+a different database file if you need multiple configurations.
+
 Example:
   radar init`,
 	RunE: runInit,
 }
 
+func init() {
+	initCmd.Flags().String("db", ".complexity-radar.db", "Database file path")
+}
+
 func runInit(cmd *cobra.Command, args []string) error {
-	s, err := store.New(".complexity-radar.db")
+	dbPath, _ := cmd.Flags().GetString("db")
+
+	s, err := openStore(dbPath)
 	if err != nil {
-		return fmt.Errorf("opening database: %w", err)
+		return err
 	}
 	defer func() { _ = s.Close() }()
 
@@ -42,8 +51,8 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Printf("\nConfiguration saved to .complexity-radar.db\n")
-	fmt.Printf("Run 'radar scan' to analyze your project.\n")
+	fmt.Fprintf(cmd.OutOrStdout(), "\nConfiguration saved to %s\n", dbPath)
+	fmt.Fprintln(cmd.OutOrStdout(), "Run 'radar scan' to analyze your project.")
 
 	return nil
 }
@@ -57,13 +66,13 @@ func promptProject(reader *bufio.Reader, s *store.Store) (*model.Project, error)
 	}
 
 	if len(existing) > 0 {
-		fmt.Println("Existing projects:")
+		fmt.Println("\nExisting projects:")
 		for i, p := range existing {
 			fmt.Printf("  %d. %s\n", i+1, p.Name)
 		}
-		fmt.Println()
 	}
 
+	fmt.Println()
 	name, err := prompt(reader, "Project name", "")
 	if err != nil {
 		return nil, err
@@ -94,6 +103,7 @@ func promptRepositories(reader *bufio.Reader, s *store.Store, projectID int64) (
 
 	var repos []model.Repository
 	for {
+		fmt.Println()
 		url, err := prompt(reader, "Repository URL (e.g. github.com/org/repo)", "")
 		if err != nil {
 			return nil, err
@@ -104,6 +114,11 @@ func promptRepositories(reader *bufio.Reader, s *store.Store, projectID int64) (
 				continue
 			}
 			break
+		}
+
+		if !isValidRepoURL(url) {
+			fmt.Println("Invalid URL. Expected format: github.com/org/repo")
+			continue
 		}
 
 		branch, err := prompt(reader, "Branch", "main")
@@ -121,7 +136,7 @@ func promptRepositories(reader *bufio.Reader, s *store.Store, projectID int64) (
 		}
 
 		repos = append(repos, *repo)
-		fmt.Printf("Repository '%s' added.\n\n", url)
+		fmt.Printf("Repository '%s' added.\n", url)
 	}
 
 	return repos, nil
@@ -145,4 +160,12 @@ func prompt(reader *bufio.Reader, label, defaultValue string) (string, error) {
 	}
 
 	return input, nil
+}
+
+func isValidRepoURL(url string) bool {
+	url = strings.TrimSpace(url)
+	if url == "" {
+		return false
+	}
+	return strings.Contains(url, "/")
 }

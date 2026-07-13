@@ -2,11 +2,9 @@ package main
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/kobbikobb/complexity-radar/internal/collector"
 	"github.com/kobbikobb/complexity-radar/internal/sources/github"
-	"github.com/kobbikobb/complexity-radar/internal/store"
 	"github.com/spf13/cobra"
 )
 
@@ -23,24 +21,27 @@ Examples:
 	RunE: runCollect,
 }
 
+func init() {
+	collectCmd.Flags().String("db", ".complexity-radar.db", "Database file path")
+	collectCmd.Flags().String("project", "", "Project name (default: first project)")
+}
+
 func runCollect(cmd *cobra.Command, args []string) error {
-	s, err := store.New(".complexity-radar.db")
+	dbPath, _ := cmd.Flags().GetString("db")
+	projectName, _ := cmd.Flags().GetString("project")
+
+	s, err := openStore(dbPath)
 	if err != nil {
-		return fmt.Errorf("opening database: %w", err)
+		return err
 	}
 	defer func() { _ = s.Close() }()
 
-	projects, err := s.ListProjects()
+	project, err := findProject(s, projectName)
 	if err != nil {
-		return fmt.Errorf("listing projects: %w", err)
-	}
-	if len(projects) == 0 {
-		return fmt.Errorf("no project configured. Run 'radar init' first")
+		return err
 	}
 
-	project := projects[0]
-
-	cfg, err := buildConfigFromDB(s, &project)
+	cfg, err := buildConfigFromDB(s, project)
 	if err != nil {
 		return err
 	}
@@ -52,20 +53,20 @@ func runCollect(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("collecting: %w", err)
 	}
 
-	fmt.Printf("Project: %s\n", result.Project.Name)
+	fmt.Fprintf(cmd.OutOrStdout(), "Project: %s\n", result.Project.Name)
 	for _, r := range result.Repositories {
-		fmt.Printf("\nRepository: %s (branch: %s)\n", r.Repository.URL, r.Repository.Branch)
+		fmt.Fprintf(cmd.OutOrStdout(), "\nRepository: %s (branch: %s)\n", r.Repository.URL, r.Repository.Branch)
 		if len(r.Errors) > 0 {
 			for _, e := range r.Errors {
-				fmt.Fprintf(os.Stderr, "  Error: %s\n", e)
+				fmt.Fprintf(cmd.ErrOrStderr(), "  Error: %s\n", e)
 			}
 		}
-		fmt.Printf("  Metrics collected: %d\n", len(r.Metrics))
+		fmt.Fprintf(cmd.OutOrStdout(), "  Metrics collected: %d\n", len(r.Metrics))
 		for _, d := range r.Dimensions {
-			fmt.Printf("  %s: %.1f\n", d.Dimension, d.Score)
+			fmt.Fprintf(cmd.OutOrStdout(), "  %s: %.1f\n", d.Dimension, d.Score)
 		}
 	}
 
-	fmt.Printf("\nCollected successfully.\n")
+	fmt.Fprintf(cmd.OutOrStdout(), "\nCollected successfully.\n")
 	return nil
 }

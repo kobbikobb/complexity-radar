@@ -7,7 +7,6 @@ import (
 	"github.com/kobbikobb/complexity-radar/internal/output"
 	"github.com/kobbikobb/complexity-radar/internal/output/terminal"
 	"github.com/kobbikobb/complexity-radar/internal/scorer"
-	"github.com/kobbikobb/complexity-radar/internal/store"
 	"github.com/spf13/cobra"
 )
 
@@ -24,24 +23,27 @@ Examples:
 	RunE: runReport,
 }
 
+func init() {
+	reportCmd.Flags().String("db", ".complexity-radar.db", "Database file path")
+	reportCmd.Flags().String("project", "", "Project name (default: first project)")
+}
+
 func runReport(cmd *cobra.Command, args []string) error {
-	s, err := store.New(".complexity-radar.db")
+	dbPath, _ := cmd.Flags().GetString("db")
+	projectName, _ := cmd.Flags().GetString("project")
+
+	s, err := openStore(dbPath)
 	if err != nil {
-		return fmt.Errorf("opening database: %w", err)
+		return err
 	}
 	defer func() { _ = s.Close() }()
 
-	projects, err := s.ListProjects()
+	project, err := findProject(s, projectName)
 	if err != nil {
-		return fmt.Errorf("listing projects: %w", err)
-	}
-	if len(projects) == 0 {
-		return fmt.Errorf("no project configured. Run 'radar init' first")
+		return err
 	}
 
-	project := projects[0]
-
-	cfg, err := buildConfigFromDB(s, &project)
+	cfg, err := buildConfigFromDB(s, project)
 	if err != nil {
 		return err
 	}
@@ -62,7 +64,7 @@ func runReport(cmd *cobra.Command, args []string) error {
 		}
 
 		if len(metrics) == 0 {
-			fmt.Printf("No metrics collected for %s. Run 'radar collect' first.\n", repo.URL)
+			fmt.Fprintf(cmd.OutOrStdout(), "No metrics collected for %s. Run 'radar collect' first.\n", repo.URL)
 			continue
 		}
 
@@ -70,6 +72,7 @@ func runReport(cmd *cobra.Command, args []string) error {
 		for _, m := range metrics {
 			mt, err := s.GetMetricTypeByID(m.MetricTypeID)
 			if err != nil {
+				fmt.Fprintf(cmd.ErrOrStderr(), "  Warning: unknown metric type %d, skipping\n", m.MetricTypeID)
 				continue
 			}
 			rawMetrics[mt.Name] = m.Value

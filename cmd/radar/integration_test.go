@@ -1,8 +1,9 @@
 package main
 
 import (
-	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/kobbikobb/complexity-radar/internal/model"
@@ -18,16 +19,13 @@ func TestIntegrationScan(t *testing.T) {
 		t.Skip("integration test: gh not authenticated")
 	}
 
-	// Create database in current directory for the scan command
-	dbPath := ".complexity-radar.db"
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, ".complexity-radar.db")
+
 	s, err := store.New(dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() {
-		_ = s.Close()
-		_ = os.Remove(dbPath)
-	}()
 
 	project := &model.Project{
 		Name:        "complexity-radar",
@@ -48,7 +46,7 @@ func TestIntegrationScan(t *testing.T) {
 
 	_ = s.Close()
 
-	cmd := exec.Command("go", "run", ".", "scan")
+	cmd := exec.Command("go", "run", ".", "scan", "--db", dbPath)
 	out, err := cmd.CombinedOutput()
 	t.Logf("Output:\n%s", out)
 
@@ -57,32 +55,19 @@ func TestIntegrationScan(t *testing.T) {
 	}
 
 	output := string(out)
-	if !contains(output, "Collecting data...") {
+	if !strings.Contains(output, "Collecting data...") {
 		t.Error("missing collection progress message")
 	}
-	if !contains(output, "Generating report...") {
+	if !strings.Contains(output, "Generating report...") {
 		t.Error("missing report progress message")
 	}
-	if !contains(output, "OVERALL SCORE:") {
+	if !strings.Contains(output, "OVERALL SCORE:") {
 		t.Error("missing overall score in output")
 	}
-	if !contains(output, "Dimension Scores:") {
+	if !strings.Contains(output, "Dimension Scores:") {
 		t.Error("missing dimension scores")
 	}
-	if !contains(output, "Metric Details:") {
+	if !strings.Contains(output, "Metric Details:") {
 		t.Error("missing metric details")
 	}
-}
-
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && searchSubstring(s, substr)
-}
-
-func searchSubstring(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }

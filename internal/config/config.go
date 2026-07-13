@@ -2,10 +2,7 @@ package config
 
 import (
 	"fmt"
-	"os"
 	"strings"
-
-	"github.com/pelletier/go-toml/v2"
 )
 
 type Config struct {
@@ -64,49 +61,6 @@ func DefaultWeights() WeightsConfig {
 		Delivery:       0.30,
 		Infrastructure: 0.25,
 		Code:           0.20,
-	}
-}
-
-// Load reads and parses a TOML config file, applies defaults, and validates.
-func Load(path string) (*Config, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("reading config file: %w", err)
-	}
-
-	cfg, err := Parse(data)
-	if err != nil {
-		return nil, fmt.Errorf("parsing config file %s: %w", path, err)
-	}
-
-	return cfg, nil
-}
-
-// Parse parses TOML bytes into a Config, applies defaults, and validates.
-func Parse(data []byte) (*Config, error) {
-	var cfg Config
-	if err := toml.Unmarshal(data, &cfg); err != nil {
-		return nil, fmt.Errorf("invalid TOML: %w", err)
-	}
-
-	applyDefaults(&cfg)
-
-	if err := Validate(&cfg); err != nil {
-		return nil, err
-	}
-
-	return &cfg, nil
-}
-
-func applyDefaults(cfg *Config) {
-	if cfg.Weights == (WeightsConfig{}) {
-		cfg.Weights = DefaultWeights()
-	}
-
-	for i := range cfg.Repositories {
-		if cfg.Repositories[i].Branch == "" {
-			cfg.Repositories[i].Branch = "main"
-		}
 	}
 }
 

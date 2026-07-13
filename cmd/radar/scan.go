@@ -8,7 +8,6 @@ import (
 	"github.com/kobbikobb/complexity-radar/internal/output/terminal"
 	"github.com/kobbikobb/complexity-radar/internal/scorer"
 	"github.com/kobbikobb/complexity-radar/internal/sources/github"
-	"github.com/kobbikobb/complexity-radar/internal/store"
 	"github.com/spf13/cobra"
 )
 
@@ -25,44 +24,47 @@ Example:
 	RunE: runScan,
 }
 
+func init() {
+	scanCmd.Flags().String("db", ".complexity-radar.db", "Database file path")
+	scanCmd.Flags().String("project", "", "Project name (default: first project)")
+}
+
 func runScan(cmd *cobra.Command, args []string) error {
-	s, err := store.New(".complexity-radar.db")
+	dbPath, _ := cmd.Flags().GetString("db")
+	projectName, _ := cmd.Flags().GetString("project")
+
+	s, err := openStore(dbPath)
 	if err != nil {
-		return fmt.Errorf("opening database: %w", err)
+		return err
 	}
 	defer func() { _ = s.Close() }()
 
-	projects, err := s.ListProjects()
+	project, err := findProject(s, projectName)
 	if err != nil {
-		return fmt.Errorf("listing projects: %w", err)
-	}
-	if len(projects) == 0 {
-		return fmt.Errorf("no project configured. Run 'radar init' first")
+		return err
 	}
 
-	project := projects[0]
-
-	cfg, err := buildConfigFromDB(s, &project)
+	cfg, err := buildConfigFromDB(s, project)
 	if err != nil {
 		return err
 	}
 
 	src := github.NewSource()
 
-	fmt.Println("Collecting data...")
+	fmt.Fprintln(cmd.OutOrStdout(), "Collecting data...")
 	result, err := collector.Collect(cmd.Context(), cfg, s, src)
 	if err != nil {
 		return fmt.Errorf("collecting: %w", err)
 	}
 
-	fmt.Println("Generating report...")
+	fmt.Fprintln(cmd.OutOrStdout(), "Generating report...")
 	formatter := terminal.New()
 	formatter.UseColor = true
 
 	for _, repoResult := range result.Repositories {
 		if len(repoResult.Errors) > 0 {
 			for _, e := range repoResult.Errors {
-				_, _ = fmt.Fprintf(cmd.OutOrStderr(), "  Warning: %s\n", e)
+				fmt.Fprintf(cmd.ErrOrStderr(), "  Warning: %s\n", e)
 			}
 		}
 
@@ -78,7 +80,11 @@ func runScan(cmd *cobra.Command, args []string) error {
 
 		metricReports := make([]output.MetricReport, 0, len(repoResult.Metrics))
 		for name, raw := range repoResult.Metrics {
-			mt, _ := s.GetMetricTypeByName(name)
+			mt, err := s.GetMetricTypeByName(name)
+			if err != nil {
+				fmt.Fprintf(cmd.ErrOrStderr(), "  Warning: unknown metric %s, skipping\n", name)
+				continue
+			}
 			normalized := scorer.NormalizeMetric(name, raw)
 			metricReports = append(metricReports, output.MetricReport{
 				Name:       name,
