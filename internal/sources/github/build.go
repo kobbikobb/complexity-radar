@@ -18,6 +18,33 @@ type WorkflowRun struct {
 	UpdatedAt    string `json:"updated_at"`
 	RunStartedAt string `json:"run_started_at"`
 	RunAttempt   int    `json:"run_attempt"`
+	Event        string `json:"event"`
+	HeadBranch   string `json:"head_branch"`
+}
+
+// isSuperseded checks if this run was superseded by a later attempt.
+// Matches by branch + attempt number. Different events (push vs workflow_dispatch)
+// on the same branch may be incorrectly marked - acceptable false positive rate.
+func isSuperseded(runs []WorkflowRun, idx int) bool {
+	r := runs[idx]
+	for j := idx + 1; j < len(runs); j++ {
+		next := runs[j]
+		if next.HeadBranch == r.HeadBranch && next.RunAttempt > r.RunAttempt {
+			return true
+		}
+	}
+	return false
+}
+
+// isSkippable returns true for runs that shouldn't count toward success ratio.
+func isSkippable(r WorkflowRun) bool {
+	switch r.Conclusion {
+	case "cancelled", "skipped", "stale":
+		return true
+	case "":
+		return r.Status == "queued" || r.Status == "in_progress"
+	}
+	return false
 }
 
 func buildSuccessRatio(runs []WorkflowRun) sources.SourceMetric {
@@ -26,13 +53,25 @@ func buildSuccessRatio(runs []WorkflowRun) sources.SourceMetric {
 	}
 
 	successes := 0
-	for _, r := range runs {
+	total := 0
+	for i, r := range runs {
+		if isSkippable(r) {
+			continue
+		}
+		if isSuperseded(runs, i) {
+			continue
+		}
+		total++
 		if r.Conclusion == "success" {
 			successes++
 		}
 	}
 
-	ratio := float64(successes) / float64(len(runs))
+	if total == 0 {
+		return sources.SourceMetric{Type: model.MetricTypeBuildSuccessRatio, Value: 0}
+	}
+
+	ratio := float64(successes) / float64(total)
 	return sources.SourceMetric{Type: model.MetricTypeBuildSuccessRatio, Value: ratio}
 }
 
@@ -65,9 +104,10 @@ func buildTime(runs []WorkflowRun) sources.SourceMetric {
 }
 
 func (s *Source) fetchWorkflowRuns(ctx context.Context, owner, name, branch string) ([]WorkflowRun, error) {
+	// per_page=100: intentional cap. Most repos have <100 recent runs.
 	params := map[string]string{
 		"branch":   branch,
-		"per_page": "30",
+		"per_page": "100",
 	}
 	endpoint := fmt.Sprintf("/repos/%s/%s/actions/runs", owner, name)
 	data, err := s.client.GetWithParams(ctx, endpoint, params)

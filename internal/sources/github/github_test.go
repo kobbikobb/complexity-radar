@@ -136,9 +136,9 @@ func TestParseRepoURLErrors(t *testing.T) {
 
 func TestCollectSecurityVulnerabilities(t *testing.T) {
 	alerts := []Vulnerability{
-		{State: "open"},
-		{State: "open"},
-		{State: "dismissed"},
+		{State: "open", Severity: "high"},
+		{State: "open", Severity: "critical"},
+		{State: "dismissed", Severity: "low"},
 	}
 	data, _ := json.Marshal(alerts)
 
@@ -159,8 +159,10 @@ func TestCollectSecurityVulnerabilities(t *testing.T) {
 	if !ok {
 		t.Fatal("missing security_vulnerabilities metric")
 	}
-	if m.Value != 2 {
-		t.Errorf("security vulnerabilities = %v, want 2", m.Value)
+	// critical=1.0 + high=0.7 = 1.7 (dismissed not counted)
+	want := 1.7
+	if m.Value != want {
+		t.Errorf("security vulnerabilities = %v, want %v", m.Value, want)
 	}
 }
 

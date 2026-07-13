@@ -11,7 +11,28 @@ import (
 
 // Vulnerability represents a Dependabot alert from the GitHub API.
 type Vulnerability struct {
-	State string `json:"state"`
+	State                 string `json:"state"`
+	Severity              string `json:"severity"`
+	SecurityVulnerability *struct {
+		Severity string `json:"severity"`
+	} `json:"security_vulnerability"`
+}
+
+func severityWeight(sev string) float64 {
+	switch sev {
+	case "critical":
+		return 1.0
+	case "high":
+		return 0.7
+	case "medium":
+		return 0.3
+	case "low":
+		return 0.1
+	case "info":
+		return 0.0
+	default:
+		return 0.1
+	}
 }
 
 func (s *Source) collectSecurityVulnerabilities(ctx context.Context, owner, name string) ([]sources.SourceMetric, error) {
@@ -26,17 +47,25 @@ func (s *Source) collectSecurityVulnerabilities(ctx context.Context, owner, name
 		return nil, fmt.Errorf("parsing dependabot alerts: %w", err)
 	}
 
-	count := 0
+	total := 0
+	weightedSum := 0.0
 	for _, a := range alerts {
-		if a.State == "open" {
-			count++
+		if a.State != "open" {
+			continue
 		}
+		total++
+
+		sev := a.Severity
+		if a.SecurityVulnerability != nil && a.SecurityVulnerability.Severity != "" {
+			sev = a.SecurityVulnerability.Severity
+		}
+		weightedSum += severityWeight(sev)
 	}
 
 	return []sources.SourceMetric{
 		{
 			Type:  model.MetricTypeSecurityVulnerabilities,
-			Value: float64(count),
+			Value: weightedSum,
 		},
 	}, nil
 }
