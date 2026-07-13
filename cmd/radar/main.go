@@ -18,9 +18,10 @@ calculates weighted complexity scores, and tracks how your scores
 evolve over time.
 
 Get started:
-  radar scan          # Collect data and generate report
-  radar collect       # Pull data from configured sources
-  radar report        # Generate complexity report
+  radar init           # Configure your project
+  radar scan           # Collect data and generate report
+  radar collect        # Pull data from configured sources
+  radar report         # Generate complexity report
 
 For more information, visit: https://github.com/kobbikobb/complexity-radar`,
 }
@@ -33,6 +34,7 @@ func main() {
 }
 
 func init() {
+	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(collectCmd)
 	rootCmd.AddCommand(reportCmd)
 	rootCmd.AddCommand(scanCmd)

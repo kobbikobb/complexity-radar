@@ -2,35 +2,32 @@ package config
 
 import (
 	"fmt"
-	"os"
 	"strings"
-
-	"github.com/pelletier/go-toml/v2"
 )
 
 type Config struct {
-	Project      ProjectConfig      `toml:"project"`
-	Repositories []RepositoryConfig `toml:"repositories"`
-	Weights      WeightsConfig      `toml:"weights"`
-	Thresholds   ThresholdsConfig   `toml:"thresholds"`
+	Project      ProjectConfig
+	Repositories []RepositoryConfig
+	Weights      WeightsConfig
+	Thresholds   ThresholdsConfig
 }
 
 type ProjectConfig struct {
-	Name        string `toml:"name"`
-	Description string `toml:"description"`
+	Name        string
+	Description string
 }
 
 type RepositoryConfig struct {
-	URL    string `toml:"url"`
-	Branch string `toml:"branch"`
+	URL    string
+	Branch string
 }
 
 // WeightsConfig defines dimension weights for scoring (must sum to 1.0).
 type WeightsConfig struct {
-	Security       float64 `toml:"security"`
-	Delivery       float64 `toml:"delivery"`
-	Infrastructure float64 `toml:"infrastructure"`
-	Code           float64 `toml:"code"`
+	Security       float64
+	Delivery       float64
+	Infrastructure float64
+	Code           float64
 }
 
 // Weight returns the weight for the given dimension.
@@ -50,11 +47,11 @@ func (w WeightsConfig) Weight(d string) float64 {
 }
 
 type ThresholdsConfig struct {
-	SecurityVulnerabilitiesCriticalMax *int     `toml:"security_vulnerabilities_critical_max"`
-	BuildSuccessRatioMin               *float64 `toml:"build_success_ratio_min"`
-	StalePullRequestsMax               *int     `toml:"stale_pull_requests_max"`
-	K8sDeploymentsMax                  *int     `toml:"k8s_deployments_max"`
-	ContainerImagesMax                 *int     `toml:"container_images_max"`
+	SecurityVulnerabilitiesCriticalMax *int
+	BuildSuccessRatioMin               *float64
+	StalePullRequestsMax               *int
+	K8sDeploymentsMax                  *int
+	ContainerImagesMax                 *int
 }
 
 // DefaultWeights returns the default weight configuration.
@@ -64,49 +61,6 @@ func DefaultWeights() WeightsConfig {
 		Delivery:       0.30,
 		Infrastructure: 0.25,
 		Code:           0.20,
-	}
-}
-
-// Load reads and parses a TOML config file, applies defaults, and validates.
-func Load(path string) (*Config, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("reading config file: %w", err)
-	}
-
-	cfg, err := Parse(data)
-	if err != nil {
-		return nil, fmt.Errorf("parsing config file %s: %w", path, err)
-	}
-
-	return cfg, nil
-}
-
-// Parse parses TOML bytes into a Config, applies defaults, and validates.
-func Parse(data []byte) (*Config, error) {
-	var cfg Config
-	if err := toml.Unmarshal(data, &cfg); err != nil {
-		return nil, fmt.Errorf("invalid TOML: %w", err)
-	}
-
-	applyDefaults(&cfg)
-
-	if err := Validate(&cfg); err != nil {
-		return nil, err
-	}
-
-	return &cfg, nil
-}
-
-func applyDefaults(cfg *Config) {
-	if cfg.Weights == (WeightsConfig{}) {
-		cfg.Weights = DefaultWeights()
-	}
-
-	for i := range cfg.Repositories {
-		if cfg.Repositories[i].Branch == "" {
-			cfg.Repositories[i].Branch = "main"
-		}
 	}
 }
 
@@ -125,7 +79,7 @@ func Validate(cfg *Config) error {
 	for i, repo := range cfg.Repositories {
 		if strings.TrimSpace(repo.URL) == "" {
 			errs = append(errs, fmt.Sprintf("repositories[%d].url is required", i))
-		} else if !isValidRepoURL(repo.URL) {
+		} else if !IsValidRepoURL(repo.URL) {
 			errs = append(errs, fmt.Sprintf("repositories[%d].url is not a valid repository URL: %q", i, repo.URL))
 		}
 	}
@@ -169,7 +123,8 @@ func validateWeights(w WeightsConfig) error {
 	return nil
 }
 
-func isValidRepoURL(url string) bool {
+// IsValidRepoURL checks if a URL looks like a valid repository URL.
+func IsValidRepoURL(url string) bool {
 	url = strings.TrimSpace(url)
 	if url == "" {
 		return false

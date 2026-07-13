@@ -1,10 +1,13 @@
 package main
 
 import (
-	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/kobbikobb/complexity-radar/internal/model"
+	"github.com/kobbikobb/complexity-radar/internal/store"
 )
 
 func TestIntegrationScan(t *testing.T) {
@@ -17,28 +20,33 @@ func TestIntegrationScan(t *testing.T) {
 	}
 
 	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, ".complexity-radar.db")
 
-	cfgContent := `
-[project]
-name = "complexity-radar"
-description = "Integration test project"
-
-[[repositories]]
-url = "github.com/kobbikobb/complexity-radar"
-branch = "main"
-
-[weights]
-security = 0.25
-delivery = 0.30
-infrastructure = 0.25
-code = 0.20
-`
-	cfgPath := filepath.Join(tmpDir, ".complexity-radar.toml")
-	if err := os.WriteFile(cfgPath, []byte(cfgContent), 0644); err != nil {
+	s, err := store.New(dbPath)
+	if err != nil {
 		t.Fatal(err)
 	}
 
-	cmd := exec.Command("go", "run", ".", "scan", "--config", cfgPath)
+	project := &model.Project{
+		Name:        "complexity-radar",
+		Description: "Integration test project",
+	}
+	if err := s.CreateProject(project); err != nil {
+		t.Fatal(err)
+	}
+
+	repo := &model.Repository{
+		ProjectID: project.ID,
+		URL:       "github.com/kobbikobb/complexity-radar",
+		Branch:    "main",
+	}
+	if err := s.CreateRepository(repo); err != nil {
+		t.Fatal(err)
+	}
+
+	_ = s.Close()
+
+	cmd := exec.Command("go", "run", ".", "scan", "--db", dbPath)
 	out, err := cmd.CombinedOutput()
 	t.Logf("Output:\n%s", out)
 
@@ -47,32 +55,19 @@ code = 0.20
 	}
 
 	output := string(out)
-	if !contains(output, "Collecting data...") {
+	if !strings.Contains(output, "Collecting data...") {
 		t.Error("missing collection progress message")
 	}
-	if !contains(output, "Generating report...") {
+	if !strings.Contains(output, "Generating report...") {
 		t.Error("missing report progress message")
 	}
-	if !contains(output, "OVERALL SCORE:") {
+	if !strings.Contains(output, "OVERALL SCORE:") {
 		t.Error("missing overall score in output")
 	}
-	if !contains(output, "Dimension Scores:") {
+	if !strings.Contains(output, "Dimension Scores:") {
 		t.Error("missing dimension scores")
 	}
-	if !contains(output, "Metric Details:") {
+	if !strings.Contains(output, "Metric Details:") {
 		t.Error("missing metric details")
 	}
-}
-
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && searchSubstring(s, substr)
-}
-
-func searchSubstring(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }

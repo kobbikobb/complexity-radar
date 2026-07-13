@@ -2,14 +2,11 @@ package main
 
 import (
 	"fmt"
-	"path/filepath"
 
-	"github.com/kobbikobb/complexity-radar/internal/config"
 	"github.com/kobbikobb/complexity-radar/internal/model"
 	"github.com/kobbikobb/complexity-radar/internal/output"
 	"github.com/kobbikobb/complexity-radar/internal/output/terminal"
 	"github.com/kobbikobb/complexity-radar/internal/scorer"
-	"github.com/kobbikobb/complexity-radar/internal/store"
 	"github.com/spf13/cobra"
 )
 
@@ -19,64 +16,46 @@ var reportCmd = &cobra.Command{
 	Long: `Calculate scores and generate a complexity report from collected data.
 Uses the most recent collection unless specified otherwise.
 
+Run 'radar collect' first to gather data.
+
 Examples:
-  radar report                      # Report for all projects
-  radar report --project "My App"  # Report for specific project
-  radar report --output json       # Output as JSON`,
+  radar report    # Report for all projects`,
 	RunE: runReport,
 }
 
 func init() {
-	reportCmd.Flags().StringP("config", "c", "", "Config file path (default: .complexity-radar.toml)")
+	reportCmd.Flags().String("db", ".complexity-radar.db", "Database file path")
+	reportCmd.Flags().String("project", "", "Project name (default: first project)")
 }
 
 func runReport(cmd *cobra.Command, args []string) error {
-	cfgPath, _ := cmd.Flags().GetString("config")
-	if cfgPath == "" {
-		cfgPath = ".complexity-radar.toml"
-	}
+	dbPath, _ := cmd.Flags().GetString("db")
+	projectName, _ := cmd.Flags().GetString("project")
 
-	cfg, err := config.Load(cfgPath)
+	s, err := openStore(dbPath)
 	if err != nil {
-		return fmt.Errorf("loading config: %w", err)
-	}
-
-	dbPath := filepath.Join(filepath.Dir(cfgPath), ".complexity-radar.db")
-	s, err := store.New(dbPath)
-	if err != nil {
-		return fmt.Errorf("opening database: %w", err)
+		return err
 	}
 	defer func() { _ = s.Close() }()
 
-	projects, err := s.ListProjects()
+	project, err := findProject(s, projectName)
 	if err != nil {
-		return fmt.Errorf("listing projects: %w", err)
+		return err
 	}
 
-	var project *model.Project
-	for _, p := range projects {
-		if p.Name == cfg.Project.Name {
-			project = &p
-			break
-		}
-	}
-
-	if project == nil {
-		return fmt.Errorf("project %q not found. Run 'radar collect' first", cfg.Project.Name)
-	}
-
-	repos, err := s.ListRepositories(project.ID)
+	cfg, err := buildConfigFromDB(s, project)
 	if err != nil {
-		return fmt.Errorf("listing repositories: %w", err)
-	}
-
-	if len(repos) == 0 {
-		return fmt.Errorf("no repositories found for project %q", project.Name)
+		return err
 	}
 
 	weights := scorer.WeightsFromConfig(cfg.Weights)
 	formatter := terminal.New()
 	formatter.UseColor = true
+
+	repos, err := s.ListRepositories(project.ID)
+	if err != nil {
+		return fmt.Errorf("listing repositories: %w", err)
+	}
 
 	for _, repo := range repos {
 		metrics, err := s.GetMetricsByRepository(repo.ID)
@@ -84,10 +63,16 @@ func runReport(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("getting metrics for %s: %w", repo.URL, err)
 		}
 
+		if len(metrics) == 0 {
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "No metrics collected for %s. Run 'radar collect' first.\n", repo.URL)
+			continue
+		}
+
 		rawMetrics := make(map[model.MetricTypeName]float64)
 		for _, m := range metrics {
 			mt, err := s.GetMetricTypeByID(m.MetricTypeID)
 			if err != nil {
+				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "  Warning: unknown metric type %d, skipping\n", m.MetricTypeID)
 				continue
 			}
 			rawMetrics[mt.Name] = m.Value

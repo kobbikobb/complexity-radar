@@ -3,7 +3,6 @@ module github.com/kobbikobb/complexity-radar
 go 1.25.0
 
 require (
-	github.com/pelletier/go-toml/v2 v2.4.3
 	github.com/spf13/cobra v1.10.2
 	modernc.org/sqlite v1.53.0
 )

@@ -2,69 +2,69 @@ package main
 
 import (
 	"fmt"
-	"path/filepath"
 
 	"github.com/kobbikobb/complexity-radar/internal/collector"
-	"github.com/kobbikobb/complexity-radar/internal/config"
 	"github.com/kobbikobb/complexity-radar/internal/output"
 	"github.com/kobbikobb/complexity-radar/internal/output/terminal"
 	"github.com/kobbikobb/complexity-radar/internal/scorer"
 	"github.com/kobbikobb/complexity-radar/internal/sources/github"
-	"github.com/kobbikobb/complexity-radar/internal/store"
 	"github.com/spf13/cobra"
 )
 
 var scanCmd = &cobra.Command{
 	Use:   "scan",
-	Short: "Collect data and generate report (shorthand)",
+	Short: "Collect data and generate report",
 	Long: `Scan performs both collection and reporting in a single command.
 This is equivalent to running 'radar collect' followed by 'radar report'.
 
-Examples:
-  radar scan                       # Full scan with default config
-  radar scan --config my.toml     # Use specific config file
-  radar scan --output json        # Output as JSON`,
+Run 'radar init' first to configure your project.
+
+Example:
+  radar scan    # Full scan`,
 	RunE: runScan,
 }
 
 func init() {
-	scanCmd.Flags().StringP("config", "c", "", "Config file path (default: .complexity-radar.toml)")
+	scanCmd.Flags().String("db", ".complexity-radar.db", "Database file path")
+	scanCmd.Flags().String("project", "", "Project name (default: first project)")
 }
 
 func runScan(cmd *cobra.Command, args []string) error {
-	cfgPath, _ := cmd.Flags().GetString("config")
-	if cfgPath == "" {
-		cfgPath = ".complexity-radar.toml"
-	}
+	dbPath, _ := cmd.Flags().GetString("db")
+	projectName, _ := cmd.Flags().GetString("project")
 
-	cfg, err := config.Load(cfgPath)
+	s, err := openStore(dbPath)
 	if err != nil {
-		return fmt.Errorf("loading config: %w", err)
-	}
-
-	dbPath := filepath.Join(filepath.Dir(cfgPath), ".complexity-radar.db")
-	s, err := store.New(dbPath)
-	if err != nil {
-		return fmt.Errorf("opening database: %w", err)
+		return err
 	}
 	defer func() { _ = s.Close() }()
 
+	project, err := findProject(s, projectName)
+	if err != nil {
+		return err
+	}
+
+	cfg, err := buildConfigFromDB(s, project)
+	if err != nil {
+		return err
+	}
+
 	src := github.NewSource()
 
-	fmt.Println("Collecting data...")
+	_, _ = fmt.Fprintln(cmd.OutOrStdout(), "Collecting data...")
 	result, err := collector.Collect(cmd.Context(), cfg, s, src)
 	if err != nil {
 		return fmt.Errorf("collecting: %w", err)
 	}
 
-	fmt.Println("Generating report...")
+	_, _ = fmt.Fprintln(cmd.OutOrStdout(), "Generating report...")
 	formatter := terminal.New()
 	formatter.UseColor = true
 
 	for _, repoResult := range result.Repositories {
 		if len(repoResult.Errors) > 0 {
 			for _, e := range repoResult.Errors {
-				_, _ = fmt.Fprintf(cmd.OutOrStderr(), "  Warning: %s\n", e)
+				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "  Warning: %s\n", e)
 			}
 		}
 
@@ -80,7 +80,11 @@ func runScan(cmd *cobra.Command, args []string) error {
 
 		metricReports := make([]output.MetricReport, 0, len(repoResult.Metrics))
 		for name, raw := range repoResult.Metrics {
-			mt, _ := s.GetMetricTypeByName(name)
+			mt, err := s.GetMetricTypeByName(name)
+			if err != nil {
+				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "  Warning: unknown metric %s, skipping\n", name)
+				continue
+			}
 			normalized := scorer.NormalizeMetric(name, raw)
 			metricReports = append(metricReports, output.MetricReport{
 				Name:       name,
