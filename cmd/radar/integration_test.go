@@ -55,7 +55,7 @@ func TestIntegrationScan(t *testing.T) {
 	}
 
 	output := string(out)
-	if !strings.Contains(output, "Collecting data...") {
+	if !strings.Contains(output, "Collecting from") {
 		t.Error("missing collection progress message")
 	}
 	if !strings.Contains(output, "Generating report...") {

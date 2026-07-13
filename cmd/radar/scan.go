@@ -51,13 +51,14 @@ func runScan(cmd *cobra.Command, args []string) error {
 
 	src := github.NewSource()
 
-	_, _ = fmt.Fprintln(cmd.OutOrStdout(), "Collecting data...")
-	result, err := collector.Collect(cmd.Context(), cfg, s, src)
+	result, err := collector.Collect(cmd.Context(), cfg, s, src, func(e collector.ProgressEvent) {
+		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), e.Message)
+	})
 	if err != nil {
 		return fmt.Errorf("collecting: %w", err)
 	}
 
-	_, _ = fmt.Fprintln(cmd.OutOrStdout(), "Generating report...")
+	_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "Generating report...")
 	formatter := terminal.New()
 	formatter.UseColor = true
 

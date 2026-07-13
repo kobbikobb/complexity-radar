@@ -48,7 +48,9 @@ func runCollect(cmd *cobra.Command, args []string) error {
 
 	src := github.NewSource()
 
-	result, err := collector.Collect(cmd.Context(), cfg, s, src)
+	result, err := collector.Collect(cmd.Context(), cfg, s, src, func(e collector.ProgressEvent) {
+		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), e.Message)
+	})
 	if err != nil {
 		return fmt.Errorf("collecting: %w", err)
 	}

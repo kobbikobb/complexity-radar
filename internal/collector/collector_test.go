@@ -57,7 +57,7 @@ func TestCollect(t *testing.T) {
 		},
 	}
 
-	result, err := Collect(context.Background(), cfg, s, src)
+	result, err := Collect(context.Background(), cfg, s, src, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +112,7 @@ func TestCollectWithMultipleRepos(t *testing.T) {
 		},
 	}
 
-	result, err := Collect(context.Background(), cfg, s, src)
+	result, err := Collect(context.Background(), cfg, s, src, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -143,7 +143,7 @@ func TestCollectWithSourceError(t *testing.T) {
 		err: context.DeadlineExceeded,
 	}
 
-	result, err := Collect(context.Background(), cfg, s, src)
+	result, err := Collect(context.Background(), cfg, s, src, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
