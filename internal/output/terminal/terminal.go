@@ -58,7 +58,7 @@ func (f *TerminalFormatter) Format(report output.Report) string {
 		name := formatMetricName(m.Name)
 		raw := formatRawValue(m.RawValue, m.Unit)
 		unit := formatUnit(m.Unit)
-		b.WriteString(tableRow(metWidths, name, raw, f.colorScore(m.Normalized), fmt.Sprintf("  %s  ", unit)))
+		b.WriteString(tableRow(metWidths, name, raw, f.colorScore(m.Normalized), unit))
 	}
 	b.WriteString(tableBorder(metWidths, "└", "┴", "┘"))
 	b.WriteString("\n")
@@ -91,18 +91,26 @@ func (f *TerminalFormatter) colorScore(score float64) string {
 	}
 }
 
+var acronymReplacements = []struct {
+	word string
+	repl string
+}{
+	{"ci cd", "CI/CD"},
+	{"k8s", "K8s"},
+	{"prs", "PRs"},
+}
+
 func formatMetricName(name model.MetricTypeName) string {
-	acronyms := map[string]string{
-		"ci cd": "CI/CD",
-		"k8s":   "K8s",
-		"prs":   "PRs",
-	}
-
 	s := strings.ReplaceAll(string(name), "_", " ")
-	if replacement, ok := acronyms[s]; ok {
-		return replacement
+
+	for _, a := range acronymReplacements {
+		s = strings.ReplaceAll(s, a.word, a.repl)
 	}
 
+	return formatMetricNameWords(s)
+}
+
+func formatMetricNameWords(s string) string {
 	var result strings.Builder
 	capitalize := true
 	for _, r := range s {
@@ -152,7 +160,16 @@ func tableRow(widths []int, cols ...string) string {
 	var b strings.Builder
 	b.WriteString("  │")
 	for i, col := range cols {
-		padding := widths[i] - len(stripANSI(col))
+		visible := stripANSI(col)
+		if len(visible) > widths[i] {
+			if widths[i] > 3 {
+				visible = visible[:widths[i]-1] + "…"
+			} else {
+				visible = visible[:widths[i]]
+			}
+			col = visible
+		}
+		padding := widths[i] - len(visible)
 		if padding < 0 {
 			padding = 0
 		}

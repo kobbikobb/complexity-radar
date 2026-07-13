@@ -42,11 +42,6 @@ func (c *Client) GetPaginated(ctx context.Context, endpoint string, params map[s
 	for k, v := range params {
 		args = append(args, "-f", fmt.Sprintf("%s=%s", k, v))
 	}
-	if maxPages > 0 {
-		args = append(args, "--paginate", "-f", fmt.Sprintf("per_page=%d", 100))
-		// gh api --paginate outputs all results as newline-delimited JSON.
-		// We'll handle the max pages limit by using --jq to combine.
-	}
 	args = append(args, endpoint)
 
 	// Use --jq to combine paginated results into a single array.

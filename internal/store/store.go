@@ -320,6 +320,21 @@ func (s *Store) GetMetricTypeByName(name model.MetricTypeName) (*model.MetricTyp
 	return mt, nil
 }
 
+func (s *Store) GetMetricTypeByID(id int64) (*model.MetricType, error) {
+	mt := &model.MetricType{}
+	err := s.db.QueryRow(
+		"SELECT id, name, dimension, unit FROM metric_types WHERE id = ?", id,
+	).Scan(&mt.ID, &mt.Name, &mt.Dimension, &mt.Unit)
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("metric type %d not found", id)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("querying metric type: %w", err)
+	}
+
+	return mt, nil
+}
+
 func (s *Store) CreateMetric(m *model.Metric) error {
 	now := time.Now().UTC().Format(time.RFC3339)
 	result, err := s.db.Exec(
