@@ -33,6 +33,22 @@ type WeightsConfig struct {
 	Code           float64 `toml:"code"`
 }
 
+// Weight returns the weight for the given dimension.
+func (w WeightsConfig) Weight(d string) float64 {
+	switch d {
+	case "security":
+		return w.Security
+	case "delivery":
+		return w.Delivery
+	case "infrastructure":
+		return w.Infrastructure
+	case "code":
+		return w.Code
+	default:
+		return 0
+	}
+}
+
 type ThresholdsConfig struct {
 	SecurityVulnerabilitiesCriticalMax *int     `toml:"security_vulnerabilities_critical_max"`
 	BuildSuccessRatioMin               *float64 `toml:"build_success_ratio_min"`
