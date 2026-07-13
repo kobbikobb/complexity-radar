@@ -6,28 +6,28 @@ import (
 )
 
 type Config struct {
-	Project      ProjectConfig      `toml:"project"`
-	Repositories []RepositoryConfig `toml:"repositories"`
-	Weights      WeightsConfig      `toml:"weights"`
-	Thresholds   ThresholdsConfig   `toml:"thresholds"`
+	Project      ProjectConfig
+	Repositories []RepositoryConfig
+	Weights      WeightsConfig
+	Thresholds   ThresholdsConfig
 }
 
 type ProjectConfig struct {
-	Name        string `toml:"name"`
-	Description string `toml:"description"`
+	Name        string
+	Description string
 }
 
 type RepositoryConfig struct {
-	URL    string `toml:"url"`
-	Branch string `toml:"branch"`
+	URL    string
+	Branch string
 }
 
 // WeightsConfig defines dimension weights for scoring (must sum to 1.0).
 type WeightsConfig struct {
-	Security       float64 `toml:"security"`
-	Delivery       float64 `toml:"delivery"`
-	Infrastructure float64 `toml:"infrastructure"`
-	Code           float64 `toml:"code"`
+	Security       float64
+	Delivery       float64
+	Infrastructure float64
+	Code           float64
 }
 
 // Weight returns the weight for the given dimension.
@@ -47,11 +47,11 @@ func (w WeightsConfig) Weight(d string) float64 {
 }
 
 type ThresholdsConfig struct {
-	SecurityVulnerabilitiesCriticalMax *int     `toml:"security_vulnerabilities_critical_max"`
-	BuildSuccessRatioMin               *float64 `toml:"build_success_ratio_min"`
-	StalePullRequestsMax               *int     `toml:"stale_pull_requests_max"`
-	K8sDeploymentsMax                  *int     `toml:"k8s_deployments_max"`
-	ContainerImagesMax                 *int     `toml:"container_images_max"`
+	SecurityVulnerabilitiesCriticalMax *int
+	BuildSuccessRatioMin               *float64
+	StalePullRequestsMax               *int
+	K8sDeploymentsMax                  *int
+	ContainerImagesMax                 *int
 }
 
 // DefaultWeights returns the default weight configuration.
@@ -79,7 +79,7 @@ func Validate(cfg *Config) error {
 	for i, repo := range cfg.Repositories {
 		if strings.TrimSpace(repo.URL) == "" {
 			errs = append(errs, fmt.Sprintf("repositories[%d].url is required", i))
-		} else if !isValidRepoURL(repo.URL) {
+		} else if !IsValidRepoURL(repo.URL) {
 			errs = append(errs, fmt.Sprintf("repositories[%d].url is not a valid repository URL: %q", i, repo.URL))
 		}
 	}
@@ -123,7 +123,8 @@ func validateWeights(w WeightsConfig) error {
 	return nil
 }
 
-func isValidRepoURL(url string) bool {
+// IsValidRepoURL checks if a URL looks like a valid repository URL.
+func IsValidRepoURL(url string) bool {
 	url = strings.TrimSpace(url)
 	if url == "" {
 		return false

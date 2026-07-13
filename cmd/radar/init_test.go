@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kobbikobb/complexity-radar/internal/config"
 	"github.com/kobbikobb/complexity-radar/internal/model"
 	"github.com/kobbikobb/complexity-radar/internal/store"
 )
@@ -173,7 +174,7 @@ func TestIsValidRepoURL(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.url, func(t *testing.T) {
-			got := isValidRepoURL(tt.url)
+			got := config.IsValidRepoURL(tt.url)
 			if got != tt.want {
 				t.Errorf("isValidRepoURL(%q) = %v, want %v", tt.url, got, tt.want)
 			}

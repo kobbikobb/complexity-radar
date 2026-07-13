@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/kobbikobb/complexity-radar/internal/config"
 	"github.com/kobbikobb/complexity-radar/internal/model"
 	"github.com/kobbikobb/complexity-radar/internal/store"
 	"github.com/spf13/cobra"
@@ -116,7 +117,7 @@ func promptRepositories(reader *bufio.Reader, s *store.Store, projectID int64) (
 			break
 		}
 
-		if !isValidRepoURL(url) {
+		if !config.IsValidRepoURL(url) {
 			fmt.Println("Invalid URL. Expected format: github.com/org/repo")
 			continue
 		}
@@ -160,12 +161,4 @@ func prompt(reader *bufio.Reader, label, defaultValue string) (string, error) {
 	}
 
 	return input, nil
-}
-
-func isValidRepoURL(url string) bool {
-	url = strings.TrimSpace(url)
-	if url == "" {
-		return false
-	}
-	return strings.Contains(url, "/")
 }
