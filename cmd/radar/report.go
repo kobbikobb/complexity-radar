@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/kobbikobb/complexity-radar/internal/model"
-	"github.com/kobbikobb/complexity-radar/internal/output"
 	"github.com/kobbikobb/complexity-radar/internal/output/terminal"
 	"github.com/kobbikobb/complexity-radar/internal/scorer"
 	"github.com/spf13/cobra"
@@ -80,25 +79,25 @@ func runReport(cmd *cobra.Command, args []string) error {
 
 		scoreResult := scorer.Score(rawMetrics, weights)
 
-		dimReports := make([]output.DimensionReport, len(scoreResult.Dimensions))
+		dimReports := make([]terminal.DimensionReport, len(scoreResult.Dimensions))
 		for i, d := range scoreResult.Dimensions {
-			dr := output.DimensionReport{
+			dr := terminal.DimensionReport{
 				Dimension:   d.Dimension,
 				Score:       d.Score,
 				Weight:      cfg.Weights.Weight(string(d.Dimension)) * 100,
 				MetricCount: d.MetricCount,
 			}
 			if d.Dimension == model.DimensionSecurity {
-				dr.Breakdown = output.SecurityBreakdown(rawMetrics)
+				dr.Breakdown = terminal.SecurityBreakdown(rawMetrics)
 			}
 			dimReports[i] = dr
 		}
 
-		metricReports := make([]output.MetricReport, 0, len(rawMetrics))
+		metricReports := make([]terminal.MetricReport, 0, len(rawMetrics))
 		for name, raw := range rawMetrics {
 			mt, _ := s.GetMetricTypeByName(name)
 			normalized := scorer.NormalizeMetric(name, raw)
-			metricReports = append(metricReports, output.MetricReport{
+			metricReports = append(metricReports, terminal.MetricReport{
 				Name:       name,
 				Dimension:  mt.Dimension,
 				RawValue:   raw,
@@ -107,7 +106,7 @@ func runReport(cmd *cobra.Command, args []string) error {
 			})
 		}
 
-		report := output.Report{
+		report := terminal.Report{
 			ProjectName:        project.Name,
 			ProjectDescription: project.Description,
 			OverallScore:       scoreResult.Overall,

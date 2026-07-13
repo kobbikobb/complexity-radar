@@ -6,18 +6,17 @@ import (
 
 	"github.com/kobbikobb/complexity-radar/internal/config"
 	"github.com/kobbikobb/complexity-radar/internal/model"
-	"github.com/kobbikobb/complexity-radar/internal/sources"
 	"github.com/kobbikobb/complexity-radar/internal/store"
 )
 
 type mockSource struct {
-	metrics []sources.SourceMetric
+	metrics []model.SourceMetric
 	err     error
 }
 
 func (m *mockSource) Name() string { return "mock" }
 
-func (m *mockSource) Collect(ctx context.Context, repo model.Repository) ([]sources.SourceMetric, error) {
+func (m *mockSource) Collect(ctx context.Context, repo model.Repository) ([]model.SourceMetric, error) {
 	return m.metrics, m.err
 }
 
@@ -49,7 +48,7 @@ func TestCollect(t *testing.T) {
 	}
 
 	src := &mockSource{
-		metrics: []sources.SourceMetric{
+		metrics: []model.SourceMetric{
 			{Type: model.MetricTypeDeployFrequency, Value: 5.0},
 			{Type: model.MetricTypeSecurityVulnerabilities, Value: 2.0},
 			{Type: model.MetricTypeBuildSuccessRatio, Value: 0.95},
@@ -107,7 +106,7 @@ func TestCollectWithMultipleRepos(t *testing.T) {
 	}
 
 	src := &mockSource{
-		metrics: []sources.SourceMetric{
+		metrics: []model.SourceMetric{
 			{Type: model.MetricTypeDeployFrequency, Value: 3.0},
 		},
 	}

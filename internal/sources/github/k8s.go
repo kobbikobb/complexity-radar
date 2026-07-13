@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	"github.com/kobbikobb/complexity-radar/internal/model"
-	"github.com/kobbikobb/complexity-radar/internal/sources"
 )
 
 // k8sManifestPrefixes lists path prefixes to check for Kubernetes manifests.
@@ -17,7 +16,7 @@ var k8sManifestPrefixes = []string{
 	"helm/",
 }
 
-func collectK8sDeployments(tree *GitTree) []sources.SourceMetric {
+func collectK8sDeployments(tree *GitTree) []model.SourceMetric {
 	count := 0
 	subdirs := map[string]bool{}
 	for _, entry := range tree.Tree {
@@ -40,7 +39,7 @@ func collectK8sDeployments(tree *GitTree) []sources.SourceMetric {
 	if divisor == 0 {
 		divisor = 1
 	}
-	return []sources.SourceMetric{
+	return []model.SourceMetric{
 		{Type: model.MetricTypeK8sDeployments, Value: float64(count) / float64(divisor)},
 	}
 }

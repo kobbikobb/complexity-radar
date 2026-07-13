@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/kobbikobb/complexity-radar/internal/model"
-	"github.com/kobbikobb/complexity-radar/internal/sources"
 )
 
 // GitTree represents a GitHub git tree response.
@@ -63,7 +62,7 @@ func (s *Source) SupportedMetrics() []model.MetricTypeName {
 	}
 }
 
-func (s *Source) Collect(ctx context.Context, repo model.Repository) ([]sources.SourceMetric, error) {
+func (s *Source) Collect(ctx context.Context, repo model.Repository) ([]model.SourceMetric, error) {
 	owner, name, err := parseRepoURL(repo.URL)
 	if err != nil {
 		return nil, fmt.Errorf("parsing repo URL %q: %w", repo.URL, err)
@@ -74,7 +73,7 @@ func (s *Source) Collect(ctx context.Context, repo model.Repository) ([]sources.
 		branch = "main"
 	}
 
-	var metrics []sources.SourceMetric
+	var metrics []model.SourceMetric
 
 	m, err := s.collectSecurityVulnerabilities(ctx, owner, name)
 	if err != nil {

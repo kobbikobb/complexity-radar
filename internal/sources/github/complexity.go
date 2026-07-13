@@ -2,10 +2,9 @@ package github
 
 import (
 	"github.com/kobbikobb/complexity-radar/internal/model"
-	"github.com/kobbikobb/complexity-radar/internal/sources"
 )
 
-func collectCodeComplexity(tree *GitTree, languages map[string]int64) []sources.SourceMetric {
+func collectCodeComplexity(tree *GitTree, languages map[string]int64) []model.SourceMetric {
 	var totalBytes int64
 	for _, b := range languages {
 		totalBytes += b
@@ -19,13 +18,13 @@ func collectCodeComplexity(tree *GitTree, languages map[string]int64) []sources.
 	}
 
 	if fileCount == 0 {
-		return []sources.SourceMetric{
+	return []model.SourceMetric{
 			{Type: model.MetricTypeCodeComplexity, Value: 0},
 		}
 	}
 
 	avgSize := float64(totalBytes) / float64(fileCount)
-	return []sources.SourceMetric{
+		return []model.SourceMetric{
 		{Type: model.MetricTypeCodeComplexity, Value: avgSize},
 	}
 }

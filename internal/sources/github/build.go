@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/kobbikobb/complexity-radar/internal/model"
-	"github.com/kobbikobb/complexity-radar/internal/sources"
 )
 
 // WorkflowRun represents a GitHub Actions workflow run.
@@ -47,9 +46,9 @@ func isSkippable(r WorkflowRun) bool {
 	return false
 }
 
-func buildSuccessRatio(runs []WorkflowRun) sources.SourceMetric {
+func buildSuccessRatio(runs []WorkflowRun) model.SourceMetric {
 	if len(runs) == 0 {
-		return sources.SourceMetric{Type: model.MetricTypeBuildSuccessRatio, Value: 0}
+		return model.SourceMetric{Type: model.MetricTypeBuildSuccessRatio, Value: 0}
 	}
 
 	successes := 0
@@ -68,16 +67,16 @@ func buildSuccessRatio(runs []WorkflowRun) sources.SourceMetric {
 	}
 
 	if total == 0 {
-		return sources.SourceMetric{Type: model.MetricTypeBuildSuccessRatio, Value: 0}
+		return model.SourceMetric{Type: model.MetricTypeBuildSuccessRatio, Value: 0}
 	}
 
 	ratio := float64(successes) / float64(total)
-	return sources.SourceMetric{Type: model.MetricTypeBuildSuccessRatio, Value: ratio}
+	return model.SourceMetric{Type: model.MetricTypeBuildSuccessRatio, Value: ratio}
 }
 
-func buildTime(runs []WorkflowRun) sources.SourceMetric {
+func buildTime(runs []WorkflowRun) model.SourceMetric {
 	if len(runs) == 0 {
-		return sources.SourceMetric{Type: model.MetricTypeBuildTime, Value: 0}
+		return model.SourceMetric{Type: model.MetricTypeBuildTime, Value: 0}
 	}
 
 	var totalSeconds float64
@@ -100,7 +99,7 @@ func buildTime(runs []WorkflowRun) sources.SourceMetric {
 		avgSeconds = totalSeconds / float64(count)
 	}
 
-	return sources.SourceMetric{Type: model.MetricTypeBuildTime, Value: avgSeconds}
+	return model.SourceMetric{Type: model.MetricTypeBuildTime, Value: avgSeconds}
 }
 
 func (s *Source) fetchWorkflowRuns(ctx context.Context, owner, name, branch string) ([]WorkflowRun, error) {

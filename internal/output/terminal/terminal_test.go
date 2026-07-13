@@ -7,21 +7,20 @@ import (
 	"time"
 
 	"github.com/kobbikobb/complexity-radar/internal/model"
-	"github.com/kobbikobb/complexity-radar/internal/output"
 )
 
 // --- helpers ---
 
-func sampleReport() output.Report {
-	return output.Report{
+func sampleReport() Report {
+	return Report{
 		ProjectName:        "my-project",
 		ProjectDescription: "A test project",
 		OverallScore:       75.0,
-		Dimensions: []output.DimensionReport{
+		Dimensions: []DimensionReport{
 			{Dimension: model.DimensionCode, Score: 82.0, Weight: 40.0, MetricCount: 3},
 			{Dimension: model.DimensionDelivery, Score: 65.0, Weight: 30.0, MetricCount: 3},
 		},
-		Metrics: []output.MetricReport{
+		Metrics: []MetricReport{
 			{Name: model.MetricTypeDeployFrequency, Dimension: model.DimensionDelivery, RawValue: 3.5, Normalized: 70.0, Unit: "per_week"},
 			{Name: model.MetricTypeBuildTime, Dimension: model.DimensionDelivery, RawValue: 120.0, Normalized: 55.0, Unit: "seconds"},
 			{Name: model.MetricTypeDependencyCount, Dimension: model.DimensionCode, RawValue: 42.0, Normalized: 85.0, Unit: "count"},
@@ -34,7 +33,7 @@ func sampleReport() output.Report {
 func TestFormatEmptyReport(t *testing.T) {
 	f := New()
 	f.UseColor = false
-	report := output.Report{
+	report := Report{
 		ProjectName: "empty",
 		CollectedAt: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
 		Dimensions:  nil,
@@ -285,7 +284,7 @@ func TestScoreGrade(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(fmt.Sprintf("%v", tt.score), func(t *testing.T) {
-			got := output.ScoreGrade(tt.score)
+			got := ScoreGrade(tt.score)
 			if got != tt.grade {
 				t.Errorf("ScoreGrade(%v) = %q, want %q", tt.score, got, tt.grade)
 			}
@@ -296,7 +295,7 @@ func TestScoreGrade(t *testing.T) {
 // --- integration tests ---
 
 func TestFormatterImplementsInterface(t *testing.T) {
-	var _ output.OutputFormatter = &TerminalFormatter{}
+	var _ OutputFormatter = &TerminalFormatter{}
 }
 
 func TestFormatSampleReport(t *testing.T) {
