@@ -22,11 +22,11 @@ Score using four fixed Dimensions (Security, Delivery, Infrastructure, Code), ea
 2. Each raw Metric value is normalized to 0–100 per-Dimension rules
 3. Each Dimension score is the arithmetic mean of its normalized Metrics
 4. The Overall score is the weighted average of Dimension scores
-5. Weights are user-configurable via TOML config and default to equal distribution
+5. Weights are user-configurable via TOML config with defaults: Security 0.25, Delivery 0.30, Infrastructure 0.25, Code 0.20
 
 ## Consequences
 
 - Users can see which dimension is dragging score down
 - Adding a new MetricType automatically feeds into the correct Dimension
 - Weights are simple to explain and configure
-- Weight non-normalization (sum != 1.0) is handled transparently
+- Config validation rejects weights that do not sum to 1.0; the scorer contains a defensive normalization fallback that is not expected to be reached in practice
