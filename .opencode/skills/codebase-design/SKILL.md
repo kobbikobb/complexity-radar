@@ -124,7 +124,7 @@ type TerminalFormatter struct { UseColor bool }
 func (f *TerminalFormatter) Format(report output.Report) string { ... }
 ```
 
-This module is shallow — its interface (`Format`) is nearly as complex as its implementation (formatting logic). But that's acceptable here: the formatting logic has no hidden complexity worth hiding, and the interface is already minimal (one method). Not every module needs to be deep — only those that would benefit from hiding complexity.
+This module is shallow — the implementation doesn't hide much complexity, and the interface is already minimal (one method). But that's acceptable here: the formatting logic has no hidden complexity worth hiding. Not every module needs to be deep — only those that would benefit from hiding complexity.
 
 ### Internal seam vs external seam
 
@@ -136,8 +136,10 @@ type Source interface { ... }
 
 // Internal seam — hidden inside GitHub source, used for testing
 type APIClient interface {
-    Get(ctx context.Context, endpoint string) ([]byte, error)
-    GetWithParams(ctx context.Context, endpoint string, params map[string]string) ([]byte, error)
+    Get(ctx context.Context, endpoint string) (json.RawMessage, error)
+    GetWithParams(ctx context.Context, endpoint string, params map[string]string) (json.RawMessage, error)
+    GetPaginated(ctx context.Context, endpoint string, params map[string]string, maxPages int) (json.RawMessage, error)
+    GetFileContent(ctx context.Context, owner, repo, path, ref string) (string, error)
 }
 ```
 
@@ -149,7 +151,7 @@ If you delete the `collector` module, complexity reappears across CLI commands �
 
 If you delete the `normalize` package inside `scorer`, the normalization logic would have to be duplicated across every dimension calculation. That's concentration — also earning its keep.
 
-If you delete the `formatMetricName` function, callers would need to implement their own string formatting. But the function is a simple utility, not a module — the deletion test applies to modules, not functions.
+If you delete the `formatMetricName` function, callers would need to implement their own string formatting. But the function is a thin utility, not a deep module — it doesn't earn its keep by hiding complexity.
 
 ## Rejected framings
 
