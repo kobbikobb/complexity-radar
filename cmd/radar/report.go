@@ -100,7 +100,7 @@ func runReport(cmd *cobra.Command, args []string) error {
 			dimReports[i] = output.DimensionReport{
 				Dimension:   d.Dimension,
 				Score:       d.Score,
-				Weight:      cfg.Weights.Weight(string(d.Dimension)),
+				Weight:      cfg.Weights.Weight(string(d.Dimension)) * 100,
 				MetricCount: d.MetricCount,
 			}
 		}
