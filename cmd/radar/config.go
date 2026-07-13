@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/kobbikobb/complexity-radar/internal/config"
@@ -33,6 +34,9 @@ func findOrCreateProject(s *store.Store, name, description string) (*model.Proje
 	p, err := s.GetProjectByName(name)
 	if err == nil {
 		return p, nil
+	}
+	if !errors.Is(err, store.ErrNotFound) {
+		return nil, fmt.Errorf("looking up project: %w", err)
 	}
 
 	p = &model.Project{

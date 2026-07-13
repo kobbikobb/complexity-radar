@@ -3,6 +3,7 @@ package store
 import (
 	"database/sql"
 	"embed"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -12,6 +13,9 @@ import (
 
 	_ "modernc.org/sqlite"
 )
+
+// ErrNotFound is returned when a requested entity does not exist.
+var ErrNotFound = errors.New("not found")
 
 //go:embed migrations/*.sql
 var migrationsFS embed.FS
@@ -140,7 +144,7 @@ func (s *Store) GetProjectByName(name string) (*model.Project, error) {
 		"SELECT id, name, description, created_at, updated_at FROM projects WHERE name = ?", name,
 	).Scan(&p.ID, &p.Name, &p.Description, &createdAt, &updatedAt)
 	if err == sql.ErrNoRows {
-		return nil, fmt.Errorf("project %q not found", name)
+		return nil, fmt.Errorf("project %q: %w", name, ErrNotFound)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("querying project by name: %w", err)
@@ -264,7 +268,7 @@ func (s *Store) CreateRepository(r *model.Repository) error {
 }
 
 // FindOrCreateRepository returns an existing repository matching projectID and URL,
-// or creates a new one if none exists.
+// or creates a new one if none exists. If the branch differs, it is updated.
 func (s *Store) FindOrCreateRepository(projectID int64, url, branch string) (*model.Repository, error) {
 	r := &model.Repository{}
 	var createdAt, updatedAt string
@@ -273,8 +277,27 @@ func (s *Store) FindOrCreateRepository(projectID int64, url, branch string) (*mo
 		projectID, url,
 	).Scan(&r.ID, &r.ProjectID, &r.URL, &r.Branch, &createdAt, &updatedAt)
 	if err == nil {
-		r.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
-		r.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
+		r.CreatedAt, err = time.Parse(time.RFC3339, createdAt)
+		if err != nil {
+			return nil, fmt.Errorf("parsing created_at: %w", err)
+		}
+		r.UpdatedAt, err = time.Parse(time.RFC3339, updatedAt)
+		if err != nil {
+			return nil, fmt.Errorf("parsing updated_at: %w", err)
+		}
+
+		if r.Branch != branch {
+			now := time.Now().UTC().Format(time.RFC3339)
+			if _, err := s.db.Exec(
+				"UPDATE repositories SET branch = ?, updated_at = ? WHERE id = ?",
+				branch, now, r.ID,
+			); err != nil {
+				return nil, fmt.Errorf("updating repository branch: %w", err)
+			}
+			r.Branch = branch
+			r.UpdatedAt, _ = time.Parse(time.RFC3339, now)
+		}
+
 		return r, nil
 	}
 	if err != sql.ErrNoRows {
