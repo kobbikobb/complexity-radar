@@ -284,9 +284,9 @@ func TestScoreGrade(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(fmt.Sprintf("%v", tt.score), func(t *testing.T) {
-			got := ScoreGrade(tt.score)
+			got := scoreGrade(tt.score)
 			if got != tt.grade {
-				t.Errorf("ScoreGrade(%v) = %q, want %q", tt.score, got, tt.grade)
+				t.Errorf("scoreGrade(%v) = %q, want %q", tt.score, got, tt.grade)
 			}
 		})
 	}

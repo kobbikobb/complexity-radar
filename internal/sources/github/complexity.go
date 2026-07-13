@@ -18,13 +18,13 @@ func collectCodeComplexity(tree *GitTree, languages map[string]int64) []model.So
 	}
 
 	if fileCount == 0 {
-	return []model.SourceMetric{
+		return []model.SourceMetric{
 			{Type: model.MetricTypeCodeComplexity, Value: 0},
 		}
 	}
 
 	avgSize := float64(totalBytes) / float64(fileCount)
-		return []model.SourceMetric{
+	return []model.SourceMetric{
 		{Type: model.MetricTypeCodeComplexity, Value: avgSize},
 	}
 }

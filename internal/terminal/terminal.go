@@ -40,7 +40,7 @@ type OutputFormatter interface {
 	Format(report Report) string
 }
 
-func ScoreGrade(score float64) string {
+func scoreGrade(score float64) string {
 	switch {
 	case score >= 90:
 		return "A"
@@ -85,7 +85,7 @@ func (f *TerminalFormatter) Format(report Report) string {
 	b.WriteString("\n")
 
 	b.WriteString("───────────────────────────────────────────────────\n")
-	fmt.Fprintf(&b, "  OVERALL SCORE: %s [%s]\n", f.colorScore(report.OverallScore), ScoreGrade(report.OverallScore))
+	fmt.Fprintf(&b, "  OVERALL SCORE: %s [%s]\n", f.colorScore(report.OverallScore), scoreGrade(report.OverallScore))
 	b.WriteString("───────────────────────────────────────────────────\n")
 	b.WriteString("\n")
 
@@ -96,7 +96,7 @@ func (f *TerminalFormatter) Format(report Report) string {
 	b.WriteString(tableBorder(dimWidths, "├", "┼", "┤"))
 	for _, d := range report.Dimensions {
 		weight := fmt.Sprintf("%.1f%%", d.Weight)
-		row := tableRow(dimWidths, string(d.Dimension), f.colorScore(d.Score), weight, fmt.Sprintf("  %s  ", ScoreGrade(d.Score)))
+		row := tableRow(dimWidths, string(d.Dimension), f.colorScore(d.Score), weight, fmt.Sprintf("  %s  ", scoreGrade(d.Score)))
 		if d.Breakdown != "" {
 			row = strings.TrimRight(row, "\n") + "  — " + d.Breakdown + "\n"
 		}

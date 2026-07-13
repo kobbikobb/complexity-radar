@@ -5,9 +5,9 @@ import (
 
 	"github.com/kobbikobb/complexity-radar/internal/collector"
 	"github.com/kobbikobb/complexity-radar/internal/model"
-	"github.com/kobbikobb/complexity-radar/internal/output/terminal"
 	"github.com/kobbikobb/complexity-radar/internal/scorer"
 	"github.com/kobbikobb/complexity-radar/internal/sources/github"
+	"github.com/kobbikobb/complexity-radar/internal/terminal"
 	"github.com/spf13/cobra"
 )
 
