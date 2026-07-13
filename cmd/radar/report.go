@@ -46,7 +46,7 @@ func runReport(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("opening database: %w", err)
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 
 	projects, err := s.ListProjects()
 	if err != nil {

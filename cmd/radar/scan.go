@@ -47,7 +47,7 @@ func runScan(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("opening database: %w", err)
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 
 	src := github.NewSource()
 
