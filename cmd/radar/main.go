@@ -33,6 +33,7 @@ func main() {
 }
 
 func init() {
+	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(collectCmd)
 	rootCmd.AddCommand(reportCmd)
 	rootCmd.AddCommand(scanCmd)

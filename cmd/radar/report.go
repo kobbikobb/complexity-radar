@@ -2,9 +2,7 @@ package main
 
 import (
 	"fmt"
-	"path/filepath"
 
-	"github.com/kobbikobb/complexity-radar/internal/config"
 	"github.com/kobbikobb/complexity-radar/internal/model"
 	"github.com/kobbikobb/complexity-radar/internal/output"
 	"github.com/kobbikobb/complexity-radar/internal/output/terminal"
@@ -19,30 +17,15 @@ var reportCmd = &cobra.Command{
 	Long: `Calculate scores and generate a complexity report from collected data.
 Uses the most recent collection unless specified otherwise.
 
+Run 'radar collect' first to gather data.
+
 Examples:
-  radar report                      # Report for all projects
-  radar report --project "My App"  # Report for specific project
-  radar report --output json       # Output as JSON`,
+  radar report    # Report for all projects`,
 	RunE: runReport,
 }
 
-func init() {
-	reportCmd.Flags().StringP("config", "c", "", "Config file path (default: .complexity-radar.toml)")
-}
-
 func runReport(cmd *cobra.Command, args []string) error {
-	cfgPath, _ := cmd.Flags().GetString("config")
-	if cfgPath == "" {
-		cfgPath = ".complexity-radar.toml"
-	}
-
-	cfg, err := config.Load(cfgPath)
-	if err != nil {
-		return fmt.Errorf("loading config: %w", err)
-	}
-
-	dbPath := filepath.Join(filepath.Dir(cfgPath), ".complexity-radar.db")
-	s, err := store.New(dbPath)
+	s, err := store.New(".complexity-radar.db")
 	if err != nil {
 		return fmt.Errorf("opening database: %w", err)
 	}
@@ -52,36 +35,35 @@ func runReport(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("listing projects: %w", err)
 	}
-
-	var project *model.Project
-	for _, p := range projects {
-		if p.Name == cfg.Project.Name {
-			project = &p
-			break
-		}
+	if len(projects) == 0 {
+		return fmt.Errorf("no project configured. Run 'radar init' first")
 	}
 
-	if project == nil {
-		return fmt.Errorf("project %q not found. Run 'radar collect' first", cfg.Project.Name)
-	}
+	project := projects[0]
 
-	repos, err := s.ListRepositories(project.ID)
+	cfg, err := buildConfigFromDB(s, &project)
 	if err != nil {
-		return fmt.Errorf("listing repositories: %w", err)
-	}
-
-	if len(repos) == 0 {
-		return fmt.Errorf("no repositories found for project %q", project.Name)
+		return err
 	}
 
 	weights := scorer.WeightsFromConfig(cfg.Weights)
 	formatter := terminal.New()
 	formatter.UseColor = true
 
+	repos, err := s.ListRepositories(project.ID)
+	if err != nil {
+		return fmt.Errorf("listing repositories: %w", err)
+	}
+
 	for _, repo := range repos {
 		metrics, err := s.GetMetricsByRepository(repo.ID)
 		if err != nil {
 			return fmt.Errorf("getting metrics for %s: %w", repo.URL, err)
+		}
+
+		if len(metrics) == 0 {
+			fmt.Printf("No metrics collected for %s. Run 'radar collect' first.\n", repo.URL)
+			continue
 		}
 
 		rawMetrics := make(map[model.MetricTypeName]float64)

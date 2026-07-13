@@ -3,8 +3,10 @@ package main
 import (
 	"os"
 	"os/exec"
-	"path/filepath"
 	"testing"
+
+	"github.com/kobbikobb/complexity-radar/internal/model"
+	"github.com/kobbikobb/complexity-radar/internal/store"
 )
 
 func TestIntegrationScan(t *testing.T) {
@@ -16,29 +18,37 @@ func TestIntegrationScan(t *testing.T) {
 		t.Skip("integration test: gh not authenticated")
 	}
 
-	tmpDir := t.TempDir()
+	// Create database in current directory for the scan command
+	dbPath := ".complexity-radar.db"
+	s, err := store.New(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = s.Close()
+		_ = os.Remove(dbPath)
+	}()
 
-	cfgContent := `
-[project]
-name = "complexity-radar"
-description = "Integration test project"
-
-[[repositories]]
-url = "github.com/kobbikobb/complexity-radar"
-branch = "main"
-
-[weights]
-security = 0.25
-delivery = 0.30
-infrastructure = 0.25
-code = 0.20
-`
-	cfgPath := filepath.Join(tmpDir, ".complexity-radar.toml")
-	if err := os.WriteFile(cfgPath, []byte(cfgContent), 0644); err != nil {
+	project := &model.Project{
+		Name:        "complexity-radar",
+		Description: "Integration test project",
+	}
+	if err := s.CreateProject(project); err != nil {
 		t.Fatal(err)
 	}
 
-	cmd := exec.Command("go", "run", ".", "scan", "--config", cfgPath)
+	repo := &model.Repository{
+		ProjectID: project.ID,
+		URL:       "github.com/kobbikobb/complexity-radar",
+		Branch:    "main",
+	}
+	if err := s.CreateRepository(repo); err != nil {
+		t.Fatal(err)
+	}
+
+	_ = s.Close()
+
+	cmd := exec.Command("go", "run", ".", "scan")
 	out, err := cmd.CombinedOutput()
 	t.Logf("Output:\n%s", out)
 

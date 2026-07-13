@@ -3,10 +3,8 @@ package main
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/kobbikobb/complexity-radar/internal/collector"
-	"github.com/kobbikobb/complexity-radar/internal/config"
 	"github.com/kobbikobb/complexity-radar/internal/sources/github"
 	"github.com/kobbikobb/complexity-radar/internal/store"
 	"github.com/spf13/cobra"
@@ -18,33 +16,34 @@ var collectCmd = &cobra.Command{
 	Long: `Collect metrics from all configured repositories and sources.
 Data is stored locally in SQLite for later reporting.
 
+Run 'radar init' first to configure your project.
+
 Examples:
-  radar collect                    # Collect from all configured repos
-  radar collect --config my.toml  # Use specific config file`,
+  radar collect    # Collect from all configured repos`,
 	RunE: runCollect,
 }
 
-func init() {
-	collectCmd.Flags().StringP("config", "c", "", "Config file path (default: .complexity-radar.toml)")
-}
-
 func runCollect(cmd *cobra.Command, args []string) error {
-	cfgPath, _ := cmd.Flags().GetString("config")
-	if cfgPath == "" {
-		cfgPath = ".complexity-radar.toml"
-	}
-
-	cfg, err := config.Load(cfgPath)
-	if err != nil {
-		return fmt.Errorf("loading config: %w", err)
-	}
-
-	dbPath := filepath.Join(filepath.Dir(cfgPath), ".complexity-radar.db")
-	s, err := store.New(dbPath)
+	s, err := store.New(".complexity-radar.db")
 	if err != nil {
 		return fmt.Errorf("opening database: %w", err)
 	}
 	defer func() { _ = s.Close() }()
+
+	projects, err := s.ListProjects()
+	if err != nil {
+		return fmt.Errorf("listing projects: %w", err)
+	}
+	if len(projects) == 0 {
+		return fmt.Errorf("no project configured. Run 'radar init' first")
+	}
+
+	project := projects[0]
+
+	cfg, err := buildConfigFromDB(s, &project)
+	if err != nil {
+		return err
+	}
 
 	src := github.NewSource()
 

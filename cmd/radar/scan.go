@@ -2,10 +2,8 @@ package main
 
 import (
 	"fmt"
-	"path/filepath"
 
 	"github.com/kobbikobb/complexity-radar/internal/collector"
-	"github.com/kobbikobb/complexity-radar/internal/config"
 	"github.com/kobbikobb/complexity-radar/internal/output"
 	"github.com/kobbikobb/complexity-radar/internal/output/terminal"
 	"github.com/kobbikobb/complexity-radar/internal/scorer"
@@ -16,38 +14,38 @@ import (
 
 var scanCmd = &cobra.Command{
 	Use:   "scan",
-	Short: "Collect data and generate report (shorthand)",
+	Short: "Collect data and generate report",
 	Long: `Scan performs both collection and reporting in a single command.
 This is equivalent to running 'radar collect' followed by 'radar report'.
 
-Examples:
-  radar scan                       # Full scan with default config
-  radar scan --config my.toml     # Use specific config file
-  radar scan --output json        # Output as JSON`,
+Run 'radar init' first to configure your project.
+
+Example:
+  radar scan    # Full scan`,
 	RunE: runScan,
 }
 
-func init() {
-	scanCmd.Flags().StringP("config", "c", "", "Config file path (default: .complexity-radar.toml)")
-}
-
 func runScan(cmd *cobra.Command, args []string) error {
-	cfgPath, _ := cmd.Flags().GetString("config")
-	if cfgPath == "" {
-		cfgPath = ".complexity-radar.toml"
-	}
-
-	cfg, err := config.Load(cfgPath)
-	if err != nil {
-		return fmt.Errorf("loading config: %w", err)
-	}
-
-	dbPath := filepath.Join(filepath.Dir(cfgPath), ".complexity-radar.db")
-	s, err := store.New(dbPath)
+	s, err := store.New(".complexity-radar.db")
 	if err != nil {
 		return fmt.Errorf("opening database: %w", err)
 	}
 	defer func() { _ = s.Close() }()
+
+	projects, err := s.ListProjects()
+	if err != nil {
+		return fmt.Errorf("listing projects: %w", err)
+	}
+	if len(projects) == 0 {
+		return fmt.Errorf("no project configured. Run 'radar init' first")
+	}
+
+	project := projects[0]
+
+	cfg, err := buildConfigFromDB(s, &project)
+	if err != nil {
+		return err
+	}
 
 	src := github.NewSource()
 
