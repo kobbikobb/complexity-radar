@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kobbikobb/complexity-radar/internal/config"
 	"github.com/kobbikobb/complexity-radar/internal/model"
 )
 
@@ -639,6 +640,35 @@ func TestCollectGitopsDeployFrequency(t *testing.T) {
 	}
 	if m.Value != 2 {
 		t.Errorf("deploy frequency = %v, want 2", m.Value)
+	}
+}
+
+func TestCollectDeployFrequencyReleasesMethod(t *testing.T) {
+	now := time.Now()
+	releases := []Release{
+		{TagName: "v1.0.0", PublishedAt: now.Add(-2 * 24 * time.Hour).Format(time.RFC3339)},
+	}
+	data, _ := json.Marshal(releases)
+
+	responses := defaultResponses()
+	responses["/repos/org/repo/releases"] = data
+	responses["/repos/org/repo/git/trees/main"] = makeTreeJSON(nil)
+
+	client := &mockClient{responses: responses}
+	src := NewSourceWithClient(client)
+	repo := model.Repository{URL: "github.com/org/repo", Branch: "main", DeployDetection: config.DeployDetectionReleases}
+
+	metrics, err := src.Collect(context.Background(), repo)
+	if err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	m, ok := findMetric(metrics, model.MetricTypeDeployFrequency)
+	if !ok {
+		t.Fatal("missing deploy_frequency metric")
+	}
+	if m.Value != 1 {
+		t.Errorf("deploy frequency = %v, want 1", m.Value)
 	}
 }
 

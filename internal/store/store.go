@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kobbikobb/complexity-radar/internal/config"
 	"github.com/kobbikobb/complexity-radar/internal/model"
 
 	_ "modernc.org/sqlite"
@@ -248,9 +249,12 @@ func (s *Store) DeleteProject(id int64) error {
 
 func (s *Store) CreateRepository(r *model.Repository) error {
 	now := time.Now().UTC().Format(time.RFC3339)
+	if r.DeployDetection == "" {
+		r.DeployDetection = config.DeployDetectionReleases
+	}
 	result, err := s.db.Exec(
-		"INSERT INTO repositories (project_id, url, branch, gitops_repo_url, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
-		r.ProjectID, r.URL, r.Branch, r.GitopsRepoURL, now, now,
+		"INSERT INTO repositories (project_id, url, branch, gitops_repo_url, deploy_detection, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		r.ProjectID, r.URL, r.Branch, r.GitopsRepoURL, r.DeployDetection, now, now,
 	)
 	if err != nil {
 		return fmt.Errorf("inserting repository: %w", err)
@@ -319,8 +323,8 @@ func (s *Store) GetRepository(id int64) (*model.Repository, error) {
 	r := &model.Repository{}
 	var createdAt, updatedAt string
 	err := s.db.QueryRow(
-		"SELECT id, project_id, url, branch, gitops_repo_url, created_at, updated_at FROM repositories WHERE id = ?", id,
-	).Scan(&r.ID, &r.ProjectID, &r.URL, &r.Branch, &r.GitopsRepoURL, &createdAt, &updatedAt)
+		"SELECT id, project_id, url, branch, gitops_repo_url, deploy_detection, created_at, updated_at FROM repositories WHERE id = ?", id,
+	).Scan(&r.ID, &r.ProjectID, &r.URL, &r.Branch, &r.GitopsRepoURL, &r.DeployDetection, &createdAt, &updatedAt)
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("repository %d not found", id)
 	}
@@ -341,7 +345,7 @@ func (s *Store) GetRepository(id int64) (*model.Repository, error) {
 
 func (s *Store) ListRepositories(projectID int64) ([]model.Repository, error) {
 	rows, err := s.db.Query(
-		"SELECT id, project_id, url, branch, gitops_repo_url, created_at, updated_at FROM repositories WHERE project_id = ? ORDER BY id",
+		"SELECT id, project_id, url, branch, gitops_repo_url, deploy_detection, created_at, updated_at FROM repositories WHERE project_id = ? ORDER BY id",
 		projectID,
 	)
 	if err != nil {
@@ -353,7 +357,7 @@ func (s *Store) ListRepositories(projectID int64) ([]model.Repository, error) {
 	for rows.Next() {
 		var r model.Repository
 		var createdAt, updatedAt string
-		if err := rows.Scan(&r.ID, &r.ProjectID, &r.URL, &r.Branch, &r.GitopsRepoURL, &createdAt, &updatedAt); err != nil {
+		if err := rows.Scan(&r.ID, &r.ProjectID, &r.URL, &r.Branch, &r.GitopsRepoURL, &r.DeployDetection, &createdAt, &updatedAt); err != nil {
 			return nil, fmt.Errorf("scanning repository: %w", err)
 		}
 		r.CreatedAt, err = time.Parse(time.RFC3339, createdAt)
@@ -372,9 +376,12 @@ func (s *Store) ListRepositories(projectID int64) ([]model.Repository, error) {
 
 func (s *Store) UpdateRepository(r *model.Repository) error {
 	now := time.Now().UTC().Format(time.RFC3339)
+	if r.DeployDetection == "" {
+		r.DeployDetection = config.DeployDetectionReleases
+	}
 	result, err := s.db.Exec(
-		"UPDATE repositories SET url = ?, branch = ?, gitops_repo_url = ?, updated_at = ? WHERE id = ?",
-		r.URL, r.Branch, r.GitopsRepoURL, now, r.ID,
+		"UPDATE repositories SET url = ?, branch = ?, gitops_repo_url = ?, deploy_detection = ?, updated_at = ? WHERE id = ?",
+		r.URL, r.Branch, r.GitopsRepoURL, r.DeployDetection, now, r.ID,
 	)
 	if err != nil {
 		return fmt.Errorf("updating repository: %w", err)

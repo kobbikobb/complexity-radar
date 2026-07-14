@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/kobbikobb/complexity-radar/internal/config"
 	"github.com/kobbikobb/complexity-radar/internal/model"
 )
 
@@ -152,6 +153,52 @@ func TestCreateAndGetRepository(t *testing.T) {
 	}
 	if got.ProjectID != p.ID {
 		t.Errorf("project_id = %d, want %d", got.ProjectID, p.ID)
+	}
+}
+
+func TestRepositoryDeployDetectionRoundTrip(t *testing.T) {
+	s := newTestStore(t)
+
+	p := &model.Project{Name: "Parent"}
+	if err := s.CreateProject(p); err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+
+	r := &model.Repository{ProjectID: p.ID, URL: "github.com/org/repo", DeployDetection: config.DeployDetectionReleases}
+	if err := s.CreateRepository(r); err != nil {
+		t.Fatalf("CreateRepository: %v", err)
+	}
+
+	got, err := s.GetRepository(r.ID)
+	if err != nil {
+		t.Fatalf("GetRepository: %v", err)
+	}
+
+	if got.DeployDetection != config.DeployDetectionReleases {
+		t.Errorf("deploy_detection = %q, want %q", got.DeployDetection, config.DeployDetectionReleases)
+	}
+}
+
+func TestCreateRepositoryDefaultsDeployDetection(t *testing.T) {
+	s := newTestStore(t)
+
+	p := &model.Project{Name: "Parent"}
+	if err := s.CreateProject(p); err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+
+	r := &model.Repository{ProjectID: p.ID, URL: "github.com/org/repo"}
+	if err := s.CreateRepository(r); err != nil {
+		t.Fatalf("CreateRepository: %v", err)
+	}
+
+	got, err := s.GetRepository(r.ID)
+	if err != nil {
+		t.Fatalf("GetRepository: %v", err)
+	}
+
+	if got.DeployDetection != config.DeployDetectionReleases {
+		t.Errorf("deploy_detection = %q, want %q", got.DeployDetection, config.DeployDetectionReleases)
 	}
 }
 
