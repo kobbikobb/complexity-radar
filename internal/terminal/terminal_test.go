@@ -82,6 +82,20 @@ func TestFormatWithOverallScore(t *testing.T) {
 	}
 }
 
+func TestFormatShouldIncludeScoreLegend(t *testing.T) {
+	f := New()
+	f.UseColor = false
+
+	out := f.Format(sampleReport())
+
+	if !strings.Contains(out, "higher is healthier") {
+		t.Error("missing score direction legend")
+	}
+	if !strings.Contains(out, "A ≥90") {
+		t.Errorf("missing grade band legend, output:\n%s", out)
+	}
+}
+
 func TestFormatWithDimensions(t *testing.T) {
 	f := New()
 	f.UseColor = false
@@ -394,8 +408,8 @@ func TestColorScoreBoundaries(t *testing.T) {
 		wantColor string
 	}{
 		{"90 is green", 90.0, "\033[32m"},
-		{"80 is green", 80.0, "\033[32m"},
-		{"79.9 is yellow", 79.9, "\033[33m"},
+		{"75 is green", 75.0, "\033[32m"},
+		{"74.9 is yellow", 74.9, "\033[33m"},
 		{"60 is yellow", 60.0, "\033[33m"},
 		{"59.9 is red", 59.9, "\033[31m"},
 		{"0 is red", 0.0, "\033[31m"},

@@ -87,6 +87,8 @@ func (f *TerminalFormatter) Format(report Report) string {
 	b.WriteString("───────────────────────────────────────────────────\n")
 	fmt.Fprintf(&b, "  OVERALL SCORE: %s [%s]\n", f.colorScore(report.OverallScore), scoreGrade(report.OverallScore))
 	b.WriteString("───────────────────────────────────────────────────\n")
+	b.WriteString("  Scores 0–100, higher is healthier.\n")
+	b.WriteString("  A ≥90   B ≥75   C ≥60   D ≥40   F <40\n")
 	b.WriteString("\n")
 
 	b.WriteString("  Dimension Scores:\n")
@@ -138,7 +140,7 @@ func (f *TerminalFormatter) colorScore(score float64) string {
 		return fmt.Sprintf("%.1f", score)
 	}
 	switch {
-	case score >= 80:
+	case score >= 75:
 		return fmt.Sprintf("\033[32m%.1f\033[0m", score)
 	case score >= 60:
 		return fmt.Sprintf("\033[33m%.1f\033[0m", score)
