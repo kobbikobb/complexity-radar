@@ -294,6 +294,25 @@ func (s *Store) ListRepositories(projectID int64) ([]model.Repository, error) {
 	return repos, rows.Err()
 }
 
+func (s *Store) UpdateRepository(r *model.Repository) error {
+	now := time.Now().UTC().Format(time.RFC3339)
+	result, err := s.db.Exec(
+		"UPDATE repositories SET url = ?, branch = ?, gitops_repo_url = ?, updated_at = ? WHERE id = ?",
+		r.URL, r.Branch, r.GitopsRepoURL, now, r.ID,
+	)
+	if err != nil {
+		return fmt.Errorf("updating repository: %w", err)
+	}
+
+	n, _ := result.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("repository %d not found", r.ID)
+	}
+
+	r.UpdatedAt, _ = time.Parse(time.RFC3339, now)
+	return nil
+}
+
 func (s *Store) DeleteRepository(id int64) error {
 	result, err := s.db.Exec("DELETE FROM repositories WHERE id = ?", id)
 	if err != nil {

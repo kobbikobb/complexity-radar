@@ -119,51 +119,115 @@ func promptRepositories(reader *bufio.Reader, s *store.Store, projectID int64) (
 	}
 
 	if len(existing) > 0 {
-		fmt.Println("\nExisting repositories:")
-		for i, r := range existing {
-			fmt.Printf("  %d. %s (branch: %s)\n", i+1, r.URL, r.Branch)
-		}
-	}
+		for {
+			fmt.Println("\nRepositories:")
+			for i, r := range existing {
+				fmt.Printf("  %d. %s (branch: %s)\n", i+1, r.URL, r.Branch)
+			}
 
-	var repos []model.Repository
-	for {
-		fmt.Println()
-		url, err := prompt(reader, "Repository URL (e.g. github.com/org/repo)", "")
-		if err != nil {
-			return nil, err
-		}
-		if url == "" {
-			if len(repos) == 0 && len(existing) == 0 {
-				fmt.Println("At least one repository is required.")
+			choice, err := prompt(reader, "\nEnter to continue, number to edit, [a]dd new", "")
+			if err != nil {
+				return nil, err
+			}
+
+			if choice == "" {
+				break
+			}
+
+			if strings.ToLower(choice) == "a" {
+				repo, err := addRepository(reader, s, projectID)
+				if err != nil {
+					return nil, err
+				}
+				if repo != nil {
+					existing = append(existing, *repo)
+				}
 				continue
 			}
-			break
-		}
 
-		if !config.IsValidRepoURL(url) {
-			fmt.Println("Invalid URL. Expected format: github.com/org/repo")
-			continue
-		}
+			var idx int
+			if _, err := fmt.Sscanf(choice, "%d", &idx); err == nil && idx >= 1 && idx <= len(existing) {
+				updated, err := editRepository(reader, s, &existing[idx-1])
+				if err != nil {
+					return nil, err
+				}
+				existing[idx-1] = *updated
+				continue
+			}
 
-		branch, err := prompt(reader, "Branch", "main")
-		if err != nil {
-			return nil, err
+			fmt.Println("Invalid selection.")
 		}
-
-		repo := &model.Repository{
-			ProjectID: projectID,
-			URL:       url,
-			Branch:    branch,
+	} else {
+		for {
+			repo, err := addRepository(reader, s, projectID)
+			if err != nil {
+				return nil, err
+			}
+			if repo == nil {
+				break
+			}
+			existing = append(existing, *repo)
 		}
-		if err := s.CreateRepository(repo); err != nil {
-			return nil, fmt.Errorf("creating repository: %w", err)
-		}
-
-		repos = append(repos, *repo)
-		fmt.Printf("Repository '%s' added.\n", url)
 	}
 
-	return repos, nil
+	return existing, nil
+}
+
+func addRepository(reader *bufio.Reader, s *store.Store, projectID int64) (*model.Repository, error) {
+	fmt.Println()
+	url, err := prompt(reader, "Repository URL (e.g. github.com/org/repo)", "")
+	if err != nil {
+		return nil, err
+	}
+	if url == "" {
+		return nil, nil
+	}
+
+	if !config.IsValidRepoURL(url) {
+		fmt.Println("Invalid URL. Expected format: github.com/org/repo")
+		return addRepository(reader, s, projectID)
+	}
+
+	branch, err := prompt(reader, "Branch", "main")
+	if err != nil {
+		return nil, err
+	}
+
+	repo := &model.Repository{
+		ProjectID: projectID,
+		URL:       url,
+		Branch:    branch,
+	}
+	if err := s.CreateRepository(repo); err != nil {
+		return nil, fmt.Errorf("creating repository: %w", err)
+	}
+
+	fmt.Printf("Repository '%s' added.\n", url)
+	return repo, nil
+}
+
+func editRepository(reader *bufio.Reader, s *store.Store, repo *model.Repository) (*model.Repository, error) {
+	fmt.Printf("\nEditing %s\n", repo.URL)
+
+	url, err := prompt(reader, "Repository URL", repo.URL)
+	if err != nil {
+		return nil, err
+	}
+
+	branch, err := prompt(reader, "Branch", repo.Branch)
+	if err != nil {
+		return nil, err
+	}
+
+	repo.URL = url
+	repo.Branch = branch
+
+	if err := s.UpdateRepository(repo); err != nil {
+		return nil, fmt.Errorf("updating repository: %w", err)
+	}
+
+	fmt.Printf("Repository updated.\n")
+	return repo, nil
 }
 
 func prompt(reader *bufio.Reader, label, defaultValue string) (string, error) {
