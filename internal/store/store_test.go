@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql"
+	"errors"
 	"testing"
 
 	"github.com/kobbikobb/complexity-radar/internal/model"
@@ -439,6 +440,141 @@ func TestGetMetricTypeNotFound(t *testing.T) {
 	_, err := s.GetMetricTypeByName("nonexistent")
 	if err == nil {
 		t.Fatal("expected error for non-existent metric type")
+	}
+}
+
+func TestGetProjectByNameNotFound(t *testing.T) {
+	s := newTestStore(t)
+
+	_, err := s.GetProjectByName("nonexistent")
+	if err == nil {
+		t.Fatal("expected error for non-existent project")
+	}
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("expected ErrNotFound, got: %v", err)
+	}
+}
+
+func TestFindOrCreateRepositoryCreatesNew(t *testing.T) {
+	s := newTestStore(t)
+
+	p := &model.Project{Name: "Parent"}
+	if err := s.CreateProject(p); err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+
+	r, err := s.FindOrCreateRepository(p.ID, "github.com/org/repo", "main")
+	if err != nil {
+		t.Fatalf("FindOrCreateRepository: %v", err)
+	}
+
+	if r.ID == 0 {
+		t.Fatal("expected repository ID to be set")
+	}
+	if r.URL != "github.com/org/repo" {
+		t.Errorf("url = %q, want %q", r.URL, "github.com/org/repo")
+	}
+	if r.Branch != "main" {
+		t.Errorf("branch = %q, want %q", r.Branch, "main")
+	}
+	if r.ProjectID != p.ID {
+		t.Errorf("project_id = %d, want %d", r.ProjectID, p.ID)
+	}
+}
+
+func TestFindOrCreateRepositoryIdempotent(t *testing.T) {
+	s := newTestStore(t)
+
+	p := &model.Project{Name: "Parent"}
+	if err := s.CreateProject(p); err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+
+	r1, err := s.FindOrCreateRepository(p.ID, "github.com/org/repo", "main")
+	if err != nil {
+		t.Fatalf("FindOrCreateRepository (first): %v", err)
+	}
+
+	r2, err := s.FindOrCreateRepository(p.ID, "github.com/org/repo", "main")
+	if err != nil {
+		t.Fatalf("FindOrCreateRepository (second): %v", err)
+	}
+
+	if r1.ID != r2.ID {
+		t.Errorf("expected same repo ID, got %d and %d", r1.ID, r2.ID)
+	}
+
+	repos, err := s.ListRepositories(p.ID)
+	if err != nil {
+		t.Fatalf("ListRepositories: %v", err)
+	}
+	if len(repos) != 1 {
+		t.Errorf("expected 1 repo, got %d", len(repos))
+	}
+}
+
+func TestFindOrCreateRepositoryDifferentURLs(t *testing.T) {
+	s := newTestStore(t)
+
+	p := &model.Project{Name: "Parent"}
+	if err := s.CreateProject(p); err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+
+	r1, err := s.FindOrCreateRepository(p.ID, "github.com/org/repo1", "main")
+	if err != nil {
+		t.Fatalf("FindOrCreateRepository (repo1): %v", err)
+	}
+
+	r2, err := s.FindOrCreateRepository(p.ID, "github.com/org/repo2", "develop")
+	if err != nil {
+		t.Fatalf("FindOrCreateRepository (repo2): %v", err)
+	}
+
+	if r1.ID == r2.ID {
+		t.Error("expected different repo IDs for different URLs")
+	}
+
+	repos, err := s.ListRepositories(p.ID)
+	if err != nil {
+		t.Fatalf("ListRepositories: %v", err)
+	}
+	if len(repos) != 2 {
+		t.Errorf("expected 2 repos, got %d", len(repos))
+	}
+}
+
+func TestFindOrCreateRepositoryUpdatesBranch(t *testing.T) {
+	s := newTestStore(t)
+
+	p := &model.Project{Name: "Parent"}
+	if err := s.CreateProject(p); err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+
+	r1, err := s.FindOrCreateRepository(p.ID, "github.com/org/repo", "main")
+	if err != nil {
+		t.Fatalf("FindOrCreateRepository (main): %v", err)
+	}
+
+	r2, err := s.FindOrCreateRepository(p.ID, "github.com/org/repo", "develop")
+	if err != nil {
+		t.Fatalf("FindOrCreateRepository (develop): %v", err)
+	}
+
+	if r1.ID != r2.ID {
+		t.Errorf("expected same repo ID, got %d and %d", r1.ID, r2.ID)
+	}
+	if r2.Branch != "develop" {
+		t.Errorf("branch = %q, want %q", r2.Branch, "develop")
+	}
+
+	got, err := s.GetRepository(r2.ID)
+	if err != nil {
+		t.Fatalf("GetRepository: %v", err)
+	}
+	if got.Branch != "develop" {
+		t.Errorf("persisted branch = %q, want %q", got.Branch, "develop")
 	}
 }
 

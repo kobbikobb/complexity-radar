@@ -56,7 +56,17 @@ func TestCollect(t *testing.T) {
 		},
 	}
 
-	result, err := Collect(context.Background(), cfg, s, src, nil)
+	project := &model.Project{Name: "test-project", Description: "A test project"}
+	if err := s.CreateProject(project); err != nil {
+		t.Fatal(err)
+	}
+
+	repo := model.Repository{ProjectID: project.ID, URL: "github.com/org/repo", Branch: "main"}
+	if err := s.CreateRepository(&repo); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := Collect(context.Background(), cfg, s, project, []model.Repository{repo}, src, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,20 +79,20 @@ func TestCollect(t *testing.T) {
 		t.Fatalf("expected 1 repository, got %d", len(result.Repositories))
 	}
 
-	repo := result.Repositories[0]
-	if repo.Repository.URL != "github.com/org/repo" {
-		t.Errorf("expected repo URL 'github.com/org/repo', got %q", repo.Repository.URL)
+	repoResult := result.Repositories[0]
+	if repoResult.Repository.URL != "github.com/org/repo" {
+		t.Errorf("expected repo URL 'github.com/org/repo', got %q", repoResult.Repository.URL)
 	}
 
-	if len(repo.Metrics) != 4 {
-		t.Errorf("expected 4 metrics, got %d", len(repo.Metrics))
+	if len(repoResult.Metrics) != 4 {
+		t.Errorf("expected 4 metrics, got %d", len(repoResult.Metrics))
 	}
 
-	if repo.OverallScore == 0 {
+	if repoResult.OverallScore == 0 {
 		t.Error("expected non-zero overall score")
 	}
 
-	if len(repo.Dimensions) == 0 {
+	if len(repoResult.Dimensions) == 0 {
 		t.Error("expected dimension scores")
 	}
 }
@@ -111,7 +121,21 @@ func TestCollectWithMultipleRepos(t *testing.T) {
 		},
 	}
 
-	result, err := Collect(context.Background(), cfg, s, src, nil)
+	project := &model.Project{Name: "multi-repo-project"}
+	if err := s.CreateProject(project); err != nil {
+		t.Fatal(err)
+	}
+
+	repo1 := model.Repository{ProjectID: project.ID, URL: "github.com/org/repo1", Branch: "main"}
+	if err := s.CreateRepository(&repo1); err != nil {
+		t.Fatal(err)
+	}
+	repo2 := model.Repository{ProjectID: project.ID, URL: "github.com/org/repo2", Branch: "develop"}
+	if err := s.CreateRepository(&repo2); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := Collect(context.Background(), cfg, s, project, []model.Repository{repo1, repo2}, src, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,7 +166,17 @@ func TestCollectWithSourceError(t *testing.T) {
 		err: context.DeadlineExceeded,
 	}
 
-	result, err := Collect(context.Background(), cfg, s, src, nil)
+	project := &model.Project{Name: "error-project"}
+	if err := s.CreateProject(project); err != nil {
+		t.Fatal(err)
+	}
+
+	repo := model.Repository{ProjectID: project.ID, URL: "github.com/org/repo", Branch: "main"}
+	if err := s.CreateRepository(&repo); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := Collect(context.Background(), cfg, s, project, []model.Repository{repo}, src, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,8 +185,8 @@ func TestCollectWithSourceError(t *testing.T) {
 		t.Fatalf("expected 1 repository, got %d", len(result.Repositories))
 	}
 
-	repo := result.Repositories[0]
-	if len(repo.Errors) == 0 {
+	repoResult := result.Repositories[0]
+	if len(repoResult.Errors) == 0 {
 		t.Error("expected errors from failed collection")
 	}
 }
