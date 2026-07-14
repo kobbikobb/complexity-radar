@@ -143,7 +143,7 @@ func metricUnit(name model.MetricTypeName) string {
 }
 
 func metricTypeLookup(name model.MetricTypeName) (model.MetricType, bool) {
-	for _, mt := range model.MetricTypes() {
+	for _, mt := range append(model.MetricTypes(), model.DisplayMetricTypes()...) {
 		if mt.Name == name {
 			return mt, true
 		}

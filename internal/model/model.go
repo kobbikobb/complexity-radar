@@ -75,8 +75,7 @@ func MetricTypes() []MetricType {
 		{Name: MetricTypeDeployTargets, Dimension: DimensionInfrastructure, Unit: "count"},
 		{Name: MetricTypeCICDComplexity, Dimension: DimensionInfrastructure, Unit: "score"},
 		{Name: MetricTypeDependencyCount, Dimension: DimensionCode, Unit: "count"},
-		{Name: MetricTypeCodeLOC, Dimension: DimensionCode, Unit: "lines"},
-		{Name: MetricTypeCodeComplexity, Dimension: DimensionCode, Unit: "bytes/file"},
+		{Name: MetricTypeCodeComplexity, Dimension: DimensionCode, Unit: "ratio"},
 	}
 }
 
@@ -87,6 +86,7 @@ func DisplayMetricTypes() []MetricType {
 		{Name: MetricTypeSecurityHigh, Dimension: DimensionSecurity, Unit: "count"},
 		{Name: MetricTypeSecurityMedium, Dimension: DimensionSecurity, Unit: "count"},
 		{Name: MetricTypeSecurityLow, Dimension: DimensionSecurity, Unit: "count"},
+		{Name: MetricTypeCodeLOC, Dimension: DimensionCode, Unit: "lines"},
 	}
 }
 

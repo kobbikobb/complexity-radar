@@ -120,7 +120,7 @@ func (s *Source) Collect(ctx context.Context, repo model.Repository) ([]model.So
 	metrics = append(metrics, m...)
 
 	metrics = append(metrics, collectCodeLOC(languages)...)
-	metrics = append(metrics, collectCodeComplexity(tree, languages)...)
+	metrics = append(metrics, collectCodeComplexity(tree)...)
 
 	metrics = append(metrics, collectK8sDeployments(tree)...)
 	metrics = append(metrics, collectContainerImages(ctx, s.client, owner, name, branch, tree)...)

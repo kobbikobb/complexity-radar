@@ -91,6 +91,23 @@ func makeTreeJSON(paths []string) json.RawMessage {
 	return data
 }
 
+// makeSizedTreeJSON creates a JSON git tree of blobs with the given sizes.
+func makeSizedTreeJSON(sizes []int64) json.RawMessage {
+	type entry struct {
+		Path string `json:"path"`
+		Size int64  `json:"size"`
+		Type string `json:"type"`
+	}
+	var tree []entry
+	for i, s := range sizes {
+		tree = append(tree, entry{Path: fmt.Sprintf("f%d.go", i), Size: s, Type: "blob"})
+	}
+	data, _ := json.Marshal(struct {
+		Tree []entry `json:"tree"`
+	}{Tree: tree})
+	return data
+}
+
 func TestParseRepoURL(t *testing.T) {
 	tests := []struct {
 		input string
@@ -606,13 +623,8 @@ func TestCollectCodeLOC(t *testing.T) {
 }
 
 func TestCollectCodeComplexity(t *testing.T) {
-	languages := `{"Go": 10000, "TypeScript": 5000}`
-
 	responses := defaultResponses()
-	responses["/repos/org/repo/languages"] = []byte(languages)
-	responses["/repos/org/repo/git/trees/main"] = makeTreeJSON([]string{
-		"main.go", "handler.go", "utils.go",
-	})
+	responses["/repos/org/repo/git/trees/main"] = makeSizedTreeJSON([]int64{30000, 100, 100, 100})
 
 	client := &mockClient{responses: responses}
 	src := NewSourceWithClient(client)
@@ -627,9 +639,31 @@ func TestCollectCodeComplexity(t *testing.T) {
 	if !ok {
 		t.Fatal("missing code_complexity metric")
 	}
-	// totalBytes=15000, fileCount=3, avg=5000
-	if m.Value != 5000 {
-		t.Errorf("code complexity = %v, want 5000", m.Value)
+	// 1 of 4 blobs over largeFileBytes
+	if m.Value != 0.25 {
+		t.Errorf("code complexity = %v, want 0.25", m.Value)
+	}
+}
+
+func TestCollectCodeComplexityNoBlobs(t *testing.T) {
+	responses := defaultResponses()
+	responses["/repos/org/repo/git/trees/main"] = makeTreeJSON(nil)
+
+	client := &mockClient{responses: responses}
+	src := NewSourceWithClient(client)
+	repo := model.Repository{URL: "github.com/org/repo", Branch: "main"}
+
+	metrics, err := src.Collect(context.Background(), repo)
+	if err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	m, ok := findMetric(metrics, model.MetricTypeCodeComplexity)
+	if !ok {
+		t.Fatal("missing code_complexity metric")
+	}
+	if m.Value != noDataValue {
+		t.Errorf("code complexity = %v, want %v", m.Value, noDataValue)
 	}
 }
 
