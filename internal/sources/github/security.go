@@ -8,6 +8,9 @@ import (
 	"github.com/kobbikobb/complexity-radar/internal/model"
 )
 
+// devScopeWeight discounts dev-only dependency alerts: they don't ship to prod.
+const devScopeWeight = 0.3
+
 // Vulnerability represents a Dependabot alert from the GitHub API.
 type Vulnerability struct {
 	State                 string `json:"state"`
@@ -15,6 +18,9 @@ type Vulnerability struct {
 	SecurityVulnerability *struct {
 		Severity string `json:"severity"`
 	} `json:"security_vulnerability"`
+	Dependency *struct {
+		Scope string `json:"scope"`
+	} `json:"dependency"`
 }
 
 func severityWeight(sev string) float64 {
@@ -62,7 +68,11 @@ func (s *Source) collectSecurityVulnerabilities(ctx context.Context, owner, name
 		if a.SecurityVulnerability != nil && a.SecurityVulnerability.Severity != "" {
 			sev = a.SecurityVulnerability.Severity
 		}
-		weightedSum += severityWeight(sev)
+		w := severityWeight(sev)
+		if a.Dependency != nil && a.Dependency.Scope == "development" {
+			w *= devScopeWeight
+		}
+		weightedSum += w
 		switch sev {
 		case "critical":
 			critCount++

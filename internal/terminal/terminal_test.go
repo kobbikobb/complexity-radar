@@ -82,6 +82,28 @@ func TestFormatWithOverallScore(t *testing.T) {
 	}
 }
 
+func TestOverallGradeFloorsAtWorstCritical(t *testing.T) {
+	dims := []DimensionReport{
+		{Dimension: model.DimensionSecurity, Score: 45, MetricCount: 1}, // D
+		{Dimension: model.DimensionDelivery, Score: 95, MetricCount: 1},
+	}
+
+	if got := overallGrade(70, dims); got != "C" {
+		t.Errorf("overallGrade = %q, want C (capped at security D + 1)", got)
+	}
+}
+
+func TestOverallGradeIgnoresCriticalWithoutData(t *testing.T) {
+	dims := []DimensionReport{
+		{Dimension: model.DimensionSecurity, Score: 0, MetricCount: 0}, // no data, not collected
+		{Dimension: model.DimensionDelivery, Score: 95, MetricCount: 1},
+	}
+
+	if got := overallGrade(92, dims); got != "A" {
+		t.Errorf("overallGrade = %q, want A (uncollected security must not cap)", got)
+	}
+}
+
 func TestFormatShouldIncludeScoreLegend(t *testing.T) {
 	f := New()
 	f.UseColor = false

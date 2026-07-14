@@ -14,7 +14,6 @@ const (
 	refContainerImages         = 200.0
 	refDeployTargets           = 50.0
 	refDependencyCount         = 500.0
-	refCodeLOC                 = 100000.0
 	refDeployFrequency         = 5.0 // weekday deploy = full marks, not CD cadence
 	refCICDComplexity          = 500.0
 	refSecurityCritical        = 5.0
@@ -39,9 +38,7 @@ func NormalizeMetric(metricType model.MetricTypeName, value float64) float64 {
 		return clamp(100 - logNormalize(value, refDeployTargets)*100)
 	case model.MetricTypeDependencyCount:
 		return clamp(100 - logNormalize(value, refDependencyCount)*100)
-	case model.MetricTypeCodeLOC:
-		return clamp(100 - logNormalize(value, refCodeLOC)*100)
-	case model.MetricTypeCodeComplexity:
+	case model.MetricTypeLargeFileRatio:
 		if value < 0 {
 			return math.NaN()
 		}

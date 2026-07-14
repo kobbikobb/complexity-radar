@@ -3,6 +3,9 @@
 ## Metrics to Add
 
 ### Delivery
+- **Lead time for changes** - Commit → deploy duration (completes DORA alongside MTTR + change failure rate)
+  - Source: commit dates vs deploy/tag dates (deploy detection already exists)
+- **Test coverage + flaky rate** - Coverage from CI artifacts; flaky = retry markers in workflow runs
 - **Mean Time to Resolve (MTTR)** - Time from incident/bug creation to resolution
   - Source: GitHub issues with labels `incident`, `bug`, `critical`
   - Scoring: <24h = excellent, 7 days = baseline
@@ -10,6 +13,11 @@
   - Requires incident tracking + deploy correlation
 
 ### Code Health
+- **Real code complexity** - Cyclomatic / cognitive complexity + nesting depth, replacing large-file ratio as the scored signal
+  - Requires file contents + a parser (e.g. tree-sitter for multi-language)
+- **Churn × complexity hotspots** - Files that are both complex and change often (Tornhill signal) — where pain concentrates
+  - Needs per-file git history; likely a git clone + `git log --numstat` walk
+- **Inter-service coupling** - Dependency-graph fan-in/fan-out; architectural complexity lives in the edges
 - **Dead Dependency Count** - Packages in go.mod with no imports
   - Source: `go mod graph` + import analysis
   - Scoring: 0 dead deps = perfect

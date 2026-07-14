@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"testing"
 	"time"
 
@@ -70,7 +71,6 @@ func defaultResponses() map[string]json.RawMessage {
 		"/repos/org/repo/actions/runs":      []byte(`{"workflow_runs": []}`),
 		"/repos/org/repo/releases":          []byte(`[]`),
 		"/repos/org/repo/pulls":             []byte(`[]`),
-		"/repos/org/repo/languages":         []byte(`{}`),
 	}
 }
 
@@ -182,6 +182,40 @@ func TestCollectSecurityVulnerabilities(t *testing.T) {
 	// critical=1.0 + high=0.7 = 1.7 (dismissed not counted)
 	want := 1.7
 	if m.Value != want {
+		t.Errorf("security vulnerabilities = %v, want %v", m.Value, want)
+	}
+}
+
+func TestCollectSecurityVulnerabilitiesDownweightsDevScope(t *testing.T) {
+	devScope := &struct {
+		Scope string `json:"scope"`
+	}{Scope: "development"}
+	alerts := []Vulnerability{
+		{State: "open", Severity: "high"},
+		{State: "open", Severity: "high", Dependency: devScope},
+	}
+	data, _ := json.Marshal(alerts)
+
+	responses := defaultResponses()
+	responses["/repos/org/repo/dependabot/alerts"] = data
+	responses["/repos/org/repo/git/trees/main"] = makeTreeJSON(nil)
+
+	client := &mockClient{responses: responses}
+	src := NewSourceWithClient(client)
+	repo := model.Repository{URL: "github.com/org/repo", Branch: "main"}
+
+	metrics, err := src.Collect(context.Background(), repo)
+	if err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	m, ok := findMetric(metrics, model.MetricTypeSecurityVulnerabilities)
+	if !ok {
+		t.Fatal("missing security_vulnerabilities metric")
+	}
+	// runtime high=0.7 + dev high=0.7*0.3=0.21 = 0.91
+	want := 0.91
+	if math.Abs(m.Value-want) > 1e-9 {
 		t.Errorf("security vulnerabilities = %v, want %v", m.Value, want)
 	}
 }
@@ -354,8 +388,7 @@ func TestSupportedMetrics(t *testing.T) {
 		model.MetricTypeDeployFrequency,
 		model.MetricTypeStalePRs,
 		model.MetricTypeDependencyCount,
-		model.MetricTypeCodeLOC,
-		model.MetricTypeCodeComplexity,
+		model.MetricTypeLargeFileRatio,
 		model.MetricTypeK8sDeployments,
 		model.MetricTypeContainerImages,
 		model.MetricTypeDeployTargets,
@@ -596,33 +629,7 @@ func TestCollectK8sDeployments(t *testing.T) {
 	}
 }
 
-func TestCollectCodeLOC(t *testing.T) {
-	languages := `{"Go": 5000, "JavaScript": 10000}`
-
-	responses := defaultResponses()
-	responses["/repos/org/repo/languages"] = []byte(languages)
-	responses["/repos/org/repo/git/trees/main"] = makeTreeJSON(nil)
-
-	client := &mockClient{responses: responses}
-	src := NewSourceWithClient(client)
-	repo := model.Repository{URL: "github.com/org/repo", Branch: "main"}
-
-	metrics, err := src.Collect(context.Background(), repo)
-	if err != nil {
-		t.Fatalf("Collect: %v", err)
-	}
-
-	m, ok := findMetric(metrics, model.MetricTypeCodeLOC)
-	if !ok {
-		t.Fatal("missing code_loc metric")
-	}
-	// (5000 + 10000) / 50 = 300
-	if m.Value != 300 {
-		t.Errorf("code LOC = %v, want 300", m.Value)
-	}
-}
-
-func TestCollectCodeComplexity(t *testing.T) {
+func TestCollectLargeFileRatio(t *testing.T) {
 	responses := defaultResponses()
 	responses["/repos/org/repo/git/trees/main"] = makeSizedTreeJSON([]int64{30000, 100, 100, 100})
 
@@ -635,17 +642,17 @@ func TestCollectCodeComplexity(t *testing.T) {
 		t.Fatalf("Collect: %v", err)
 	}
 
-	m, ok := findMetric(metrics, model.MetricTypeCodeComplexity)
+	m, ok := findMetric(metrics, model.MetricTypeLargeFileRatio)
 	if !ok {
-		t.Fatal("missing code_complexity metric")
+		t.Fatal("missing large_file_ratio metric")
 	}
 	// 1 of 4 blobs over largeFileBytes
 	if m.Value != 0.25 {
-		t.Errorf("code complexity = %v, want 0.25", m.Value)
+		t.Errorf("large file ratio = %v, want 0.25", m.Value)
 	}
 }
 
-func TestCollectCodeComplexityNoBlobs(t *testing.T) {
+func TestCollectLargeFileRatioNoBlobs(t *testing.T) {
 	responses := defaultResponses()
 	responses["/repos/org/repo/git/trees/main"] = makeTreeJSON(nil)
 
@@ -658,12 +665,12 @@ func TestCollectCodeComplexityNoBlobs(t *testing.T) {
 		t.Fatalf("Collect: %v", err)
 	}
 
-	m, ok := findMetric(metrics, model.MetricTypeCodeComplexity)
+	m, ok := findMetric(metrics, model.MetricTypeLargeFileRatio)
 	if !ok {
-		t.Fatal("missing code_complexity metric")
+		t.Fatal("missing large_file_ratio metric")
 	}
 	if m.Value != noDataValue {
-		t.Errorf("code complexity = %v, want %v", m.Value, noDataValue)
+		t.Errorf("large file ratio = %v, want %v", m.Value, noDataValue)
 	}
 }
 

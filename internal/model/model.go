@@ -52,8 +52,7 @@ const (
 	MetricTypeSecurityHigh            MetricTypeName = "security_high"
 	MetricTypeSecurityMedium          MetricTypeName = "security_medium"
 	MetricTypeSecurityLow             MetricTypeName = "security_low"
-	MetricTypeCodeLOC                 MetricTypeName = "code_loc"
-	MetricTypeCodeComplexity          MetricTypeName = "code_complexity"
+	MetricTypeLargeFileRatio          MetricTypeName = "large_file_ratio"
 )
 
 type MetricType struct {
@@ -75,7 +74,7 @@ func MetricTypes() []MetricType {
 		{Name: MetricTypeDeployTargets, Dimension: DimensionInfrastructure, Unit: "count"},
 		{Name: MetricTypeCICDComplexity, Dimension: DimensionInfrastructure, Unit: "score"},
 		{Name: MetricTypeDependencyCount, Dimension: DimensionCode, Unit: "count"},
-		{Name: MetricTypeCodeComplexity, Dimension: DimensionCode, Unit: "ratio"},
+		{Name: MetricTypeLargeFileRatio, Dimension: DimensionCode, Unit: "ratio"},
 	}
 }
 
@@ -86,7 +85,6 @@ func DisplayMetricTypes() []MetricType {
 		{Name: MetricTypeSecurityHigh, Dimension: DimensionSecurity, Unit: "count"},
 		{Name: MetricTypeSecurityMedium, Dimension: DimensionSecurity, Unit: "count"},
 		{Name: MetricTypeSecurityLow, Dimension: DimensionSecurity, Unit: "count"},
-		{Name: MetricTypeCodeLOC, Dimension: DimensionCode, Unit: "lines"},
 	}
 }
 
