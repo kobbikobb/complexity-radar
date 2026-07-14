@@ -187,7 +187,7 @@ func TestRepositoryReleaseOptionsRoundTrip(t *testing.T) {
 		t.Fatalf("CreateProject: %v", err)
 	}
 
-	r := &model.Repository{ProjectID: p.ID, URL: "github.com/org/repo", IncludePrereleases: true, ReleaseTagPrefix: "v"}
+	r := &model.Repository{ProjectID: p.ID, URL: "github.com/org/repo", DeployDetection: config.DeployDetectionTags, IncludePrereleases: true, TagPrefix: "v"}
 	if err := s.CreateRepository(r); err != nil {
 		t.Fatalf("CreateRepository: %v", err)
 	}
@@ -200,8 +200,11 @@ func TestRepositoryReleaseOptionsRoundTrip(t *testing.T) {
 	if !got.IncludePrereleases {
 		t.Errorf("include_prereleases = %v, want true", got.IncludePrereleases)
 	}
-	if got.ReleaseTagPrefix != "v" {
-		t.Errorf("release_tag_prefix = %q, want %q", got.ReleaseTagPrefix, "v")
+	if got.TagPrefix != "v" {
+		t.Errorf("tag_prefix = %q, want %q", got.TagPrefix, "v")
+	}
+	if got.DeployDetection != config.DeployDetectionTags {
+		t.Errorf("deploy_detection = %q, want %q", got.DeployDetection, config.DeployDetectionTags)
 	}
 }
 

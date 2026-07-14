@@ -23,7 +23,7 @@ type RepositoryConfig struct {
 	GitopsRepoURL      string
 	DeployDetection    string
 	IncludePrereleases bool
-	ReleaseTagPrefix   string
+	TagPrefix          string
 }
 
 const (

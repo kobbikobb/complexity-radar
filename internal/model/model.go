@@ -106,7 +106,7 @@ type Repository struct {
 	GitopsRepoURL      string
 	DeployDetection    string
 	IncludePrereleases bool
-	ReleaseTagPrefix   string
+	TagPrefix          string
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
 }

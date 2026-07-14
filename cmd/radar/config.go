@@ -96,7 +96,7 @@ func buildConfigFromDB(s *store.Store, project *model.Project) (*config.Config, 
 			GitopsRepoURL:      r.GitopsRepoURL,
 			DeployDetection:    r.DeployDetection,
 			IncludePrereleases: r.IncludePrereleases,
-			ReleaseTagPrefix:   r.ReleaseTagPrefix,
+			TagPrefix:          r.TagPrefix,
 		})
 	}
 
