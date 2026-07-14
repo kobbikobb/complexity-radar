@@ -556,6 +556,93 @@ func TestCollectK8sDeployments(t *testing.T) {
 	}
 }
 
+func TestCollectCodeLOC(t *testing.T) {
+	languages := `{"Go": 5000, "JavaScript": 10000}`
+
+	responses := defaultResponses()
+	responses["/repos/org/repo/languages"] = []byte(languages)
+	responses["/repos/org/repo/git/trees/main"] = makeTreeJSON(nil)
+
+	client := &mockClient{responses: responses}
+	src := NewSourceWithClient(client)
+	repo := model.Repository{URL: "github.com/org/repo", Branch: "main"}
+
+	metrics, err := src.Collect(context.Background(), repo)
+	if err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	m, ok := findMetric(metrics, model.MetricTypeCodeLOC)
+	if !ok {
+		t.Fatal("missing code_loc metric")
+	}
+	// (5000 + 10000) / 50 = 300
+	if m.Value != 300 {
+		t.Errorf("code LOC = %v, want 300", m.Value)
+	}
+}
+
+func TestCollectCodeComplexity(t *testing.T) {
+	languages := `{"Go": 10000, "TypeScript": 5000}`
+
+	responses := defaultResponses()
+	responses["/repos/org/repo/languages"] = []byte(languages)
+	responses["/repos/org/repo/git/trees/main"] = makeTreeJSON([]string{
+		"main.go", "handler.go", "utils.go",
+	})
+
+	client := &mockClient{responses: responses}
+	src := NewSourceWithClient(client)
+	repo := model.Repository{URL: "github.com/org/repo", Branch: "main"}
+
+	metrics, err := src.Collect(context.Background(), repo)
+	if err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	m, ok := findMetric(metrics, model.MetricTypeCodeComplexity)
+	if !ok {
+		t.Fatal("missing code_complexity metric")
+	}
+	// totalBytes=15000, fileCount=3, avg=5000
+	if m.Value != 5000 {
+		t.Errorf("code complexity = %v, want 5000", m.Value)
+	}
+}
+
+func TestCollectGitopsDeployFrequency(t *testing.T) {
+	commits := []map[string]string{
+		{"sha": "abc123"},
+		{"sha": "def456"},
+	}
+	data, _ := json.Marshal(commits)
+
+	responses := defaultResponses()
+	responses["/repos/org/gitops/commits"] = data
+	responses["/repos/org/repo/git/trees/main"] = makeTreeJSON(nil)
+
+	client := &mockClient{responses: responses}
+	src := NewSourceWithClient(client)
+	repo := model.Repository{
+		URL:           "github.com/org/repo",
+		Branch:        "main",
+		GitopsRepoURL: "github.com/org/gitops",
+	}
+
+	metrics, err := src.Collect(context.Background(), repo)
+	if err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	m, ok := findMetric(metrics, model.MetricTypeDeployFrequency)
+	if !ok {
+		t.Fatal("missing deploy_frequency metric")
+	}
+	if m.Value != 2 {
+		t.Errorf("deploy frequency = %v, want 2", m.Value)
+	}
+}
+
 func TestParsePackageJSON(t *testing.T) {
 	content := `{"dependencies": {"a": "1", "b": "2"}, "devDependencies": {"c": "3"}}`
 	count, err := parsePackageJSON(content)
