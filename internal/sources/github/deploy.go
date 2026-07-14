@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/kobbikobb/complexity-radar/internal/config"
@@ -21,7 +22,7 @@ type Release struct {
 
 const noDataValue = -1.0
 
-func (s *Source) collectDeployFrequency(ctx context.Context, owner, name, gitopsRepoURL, method string) ([]model.SourceMetric, error) {
+func (s *Source) collectDeployFrequency(ctx context.Context, owner, name, gitopsRepoURL, method string, includePrereleases bool, tagPrefix string) ([]model.SourceMetric, error) {
 	if gitopsRepoURL != "" {
 		metrics, err := s.collectGitopsDeployFrequency(ctx, gitopsRepoURL)
 		if err == nil {
@@ -34,7 +35,7 @@ func (s *Source) collectDeployFrequency(ctx context.Context, owner, name, gitops
 		log.Printf("warning: deploy detection method %q not implemented, using releases", method)
 	}
 
-	metrics, err := s.collectReleaseDeployFrequency(ctx, owner, name)
+	metrics, err := s.collectReleaseDeployFrequency(ctx, owner, name, includePrereleases, tagPrefix)
 	if err != nil {
 		return []model.SourceMetric{
 			{Type: model.MetricTypeDeployFrequency, Value: noDataValue},
@@ -68,7 +69,7 @@ func (s *Source) collectGitopsDeployFrequency(ctx context.Context, gitopsRepoURL
 	}, nil
 }
 
-func (s *Source) collectReleaseDeployFrequency(ctx context.Context, owner, name string) ([]model.SourceMetric, error) {
+func (s *Source) collectReleaseDeployFrequency(ctx context.Context, owner, name string, includePrereleases bool, tagPrefix string) ([]model.SourceMetric, error) {
 	endpoint := fmt.Sprintf("/repos/%s/%s/releases", owner, name)
 	data, err := s.client.Get(ctx, endpoint)
 	if err != nil {
@@ -85,7 +86,13 @@ func (s *Source) collectReleaseDeployFrequency(ctx context.Context, owner, name 
 	weekCount := 0
 
 	for _, r := range releases {
-		if r.Draft || r.Prerelease {
+		if r.Draft {
+			continue
+		}
+		if r.Prerelease && !includePrereleases {
+			continue
+		}
+		if tagPrefix != "" && !strings.HasPrefix(r.TagName, tagPrefix) {
 			continue
 		}
 		published, err := time.Parse(time.RFC3339, r.PublishedAt)

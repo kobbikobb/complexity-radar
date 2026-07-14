@@ -91,10 +91,12 @@ func buildConfigFromDB(s *store.Store, project *model.Project) (*config.Config, 
 
 	for _, r := range repos {
 		cfg.Repositories = append(cfg.Repositories, config.RepositoryConfig{
-			URL:             r.URL,
-			Branch:          r.Branch,
-			GitopsRepoURL:   r.GitopsRepoURL,
-			DeployDetection: r.DeployDetection,
+			URL:                r.URL,
+			Branch:             r.Branch,
+			GitopsRepoURL:      r.GitopsRepoURL,
+			DeployDetection:    r.DeployDetection,
+			IncludePrereleases: r.IncludePrereleases,
+			ReleaseTagPrefix:   r.ReleaseTagPrefix,
 		})
 	}
 

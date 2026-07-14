@@ -193,16 +193,22 @@ func addRepository(reader *bufio.Reader, s *store.Store, projectID int64) (*mode
 		return nil, err
 	}
 
-	detection, err := promptDeployDetection(reader)
+	includePrereleases, err := promptYesNo(reader, "Include prereleases as deploys?", false)
+	if err != nil {
+		return nil, err
+	}
+
+	tagPrefix, err := prompt(reader, "Only count releases with tag prefix (optional)", "")
 	if err != nil {
 		return nil, err
 	}
 
 	repo := &model.Repository{
-		ProjectID:       projectID,
-		URL:             url,
-		Branch:          branch,
-		DeployDetection: detection,
+		ProjectID:          projectID,
+		URL:                url,
+		Branch:             branch,
+		IncludePrereleases: includePrereleases,
+		ReleaseTagPrefix:   tagPrefix,
 	}
 	if err := s.CreateRepository(repo); err != nil {
 		return nil, fmt.Errorf("creating repository: %w", err)
@@ -225,14 +231,20 @@ func editRepository(reader *bufio.Reader, s *store.Store, repo *model.Repository
 		return nil, err
 	}
 
-	detection, err := promptDeployDetection(reader)
+	includePrereleases, err := promptYesNo(reader, "Include prereleases as deploys?", repo.IncludePrereleases)
+	if err != nil {
+		return nil, err
+	}
+
+	tagPrefix, err := prompt(reader, "Only count releases with tag prefix (optional)", repo.ReleaseTagPrefix)
 	if err != nil {
 		return nil, err
 	}
 
 	repo.URL = url
 	repo.Branch = branch
-	repo.DeployDetection = detection
+	repo.IncludePrereleases = includePrereleases
+	repo.ReleaseTagPrefix = tagPrefix
 
 	if err := s.UpdateRepository(repo); err != nil {
 		return nil, fmt.Errorf("updating repository: %w", err)
@@ -242,15 +254,21 @@ func editRepository(reader *bufio.Reader, s *store.Store, repo *model.Repository
 	return repo, nil
 }
 
-func promptDeployDetection(reader *bufio.Reader) (string, error) {
-	fmt.Println("Deploy detection method:")
-	fmt.Println("  1. GitHub Releases (default)")
-	fmt.Println("  [2. git tags — coming soon]")
-
-	if _, err := prompt(reader, "Select", "1"); err != nil {
-		return "", err
+func promptYesNo(reader *bufio.Reader, label string, def bool) (bool, error) {
+	d := "n"
+	if def {
+		d = "y"
 	}
-	return config.DeployDetectionReleases, nil
+	input, err := prompt(reader, label+" (y/n)", d)
+	if err != nil {
+		return false, err
+	}
+	switch strings.ToLower(input) {
+	case "y", "yes":
+		return true, nil
+	default:
+		return false, nil
+	}
 }
 
 func prompt(reader *bufio.Reader, label, defaultValue string) (string, error) {
