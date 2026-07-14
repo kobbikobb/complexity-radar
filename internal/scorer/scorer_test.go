@@ -112,14 +112,14 @@ func TestNormalizeMetricClamped(t *testing.T) {
 	}
 }
 
-func TestNormalizeMetricCodeComplexity(t *testing.T) {
-	if got := NormalizeMetric(model.MetricTypeCodeComplexity, 0.0); !approxEqual(got, 100) {
+func TestNormalizeMetricLargeFileRatio(t *testing.T) {
+	if got := NormalizeMetric(model.MetricTypeLargeFileRatio, 0.0); !approxEqual(got, 100) {
 		t.Errorf("ratio 0.0 = %v, want 100", got)
 	}
-	if got := NormalizeMetric(model.MetricTypeCodeComplexity, 1.0); !approxEqual(got, 0) {
+	if got := NormalizeMetric(model.MetricTypeLargeFileRatio, 1.0); !approxEqual(got, 0) {
 		t.Errorf("ratio 1.0 = %v, want 0", got)
 	}
-	if got := NormalizeMetric(model.MetricTypeCodeComplexity, -1.0); !math.IsNaN(got) {
+	if got := NormalizeMetric(model.MetricTypeLargeFileRatio, -1.0); !math.IsNaN(got) {
 		t.Errorf("no-data = %v, want NaN", got)
 	}
 }
@@ -236,11 +236,10 @@ func TestScoreDimensionsAllDimensions(t *testing.T) {
 	}
 }
 
-func TestScoreDimensionsCodeIgnoresLOC(t *testing.T) {
+func TestScoreDimensionsCode(t *testing.T) {
 	metrics := map[model.MetricTypeName]float64{
-		model.MetricTypeDependencyCount: 0,         // 100
-		model.MetricTypeCodeComplexity:  0,         // 100
-		model.MetricTypeCodeLOC:         5_000_000, // display-only, must not affect score
+		model.MetricTypeDependencyCount: 0, // 100
+		model.MetricTypeLargeFileRatio:  0, // 100
 	}
 	results := ScoreDimensions(metrics)
 
@@ -254,10 +253,10 @@ func TestScoreDimensionsCodeIgnoresLOC(t *testing.T) {
 		t.Fatal("code dimension not found")
 	}
 	if !approxEqual(code.Score, 100) {
-		t.Errorf("code score = %v, want 100 (huge LOC must not lower it)", code.Score)
+		t.Errorf("code score = %v, want 100", code.Score)
 	}
 	if code.MetricCount != 2 {
-		t.Errorf("code metric count = %d, want 2 (dependency_count + code_complexity)", code.MetricCount)
+		t.Errorf("code metric count = %d, want 2 (dependency_count + large_file_ratio)", code.MetricCount)
 	}
 }
 

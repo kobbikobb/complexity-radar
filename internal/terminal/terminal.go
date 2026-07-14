@@ -55,6 +55,38 @@ func scoreGrade(score float64) string {
 	}
 }
 
+// criticalDimensions cap the overall grade so strong delivery can't mask a weak
+// critical dimension: the overall grade can't beat the worst critical grade by
+// more than one letter.
+var criticalDimensions = map[model.Dimension]bool{model.DimensionSecurity: true}
+
+var gradeOrder = []string{"F", "D", "C", "B", "A"}
+
+func gradeIndex(g string) int {
+	for i, v := range gradeOrder {
+		if v == g {
+			return i
+		}
+	}
+	return 0
+}
+
+func overallGrade(overall float64, dims []DimensionReport) string {
+	cap := len(gradeOrder) - 1
+	for _, d := range dims {
+		if !criticalDimensions[d.Dimension] || d.MetricCount == 0 {
+			continue
+		}
+		if c := gradeIndex(scoreGrade(d.Score)) + 1; c < cap {
+			cap = c
+		}
+	}
+	if gradeIndex(scoreGrade(overall)) > cap {
+		return gradeOrder[cap]
+	}
+	return scoreGrade(overall)
+}
+
 func SecurityBreakdown(metrics map[model.MetricTypeName]float64) string {
 	crit := int(metrics[model.MetricTypeSecurityCritical])
 	high := int(metrics[model.MetricTypeSecurityHigh])
@@ -85,7 +117,7 @@ func (f *TerminalFormatter) Format(report Report) string {
 	b.WriteString("\n")
 
 	b.WriteString("───────────────────────────────────────────────────\n")
-	fmt.Fprintf(&b, "  OVERALL SCORE: %s [%s]\n", f.colorScore(report.OverallScore), scoreGrade(report.OverallScore))
+	fmt.Fprintf(&b, "  OVERALL SCORE: %s [%s]\n", f.colorScore(report.OverallScore), overallGrade(report.OverallScore, report.Dimensions))
 	b.WriteString("───────────────────────────────────────────────────\n")
 	b.WriteString("  Scores 0–100, higher is healthier.\n")
 	b.WriteString("  A ≥90   B ≥75   C ≥60   D ≥40   F <40\n")
@@ -108,6 +140,7 @@ func (f *TerminalFormatter) Format(report Report) string {
 	b.WriteString("\n")
 
 	b.WriteString("  Metric Details:\n")
+	b.WriteString("  Raw values are per-repository totals.\n")
 	metWidths := []int{25, 11, 7, 7}
 	b.WriteString(tableBorder(metWidths, "┌", "┬", "┐"))
 	b.WriteString(tableRow(metWidths, "Metric", "Raw", "Score", "Unit"))

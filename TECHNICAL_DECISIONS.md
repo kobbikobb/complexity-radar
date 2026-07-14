@@ -136,17 +136,19 @@ type Source interface {
 | **Security** | Security vulnerabilities |
 | **Delivery** | Deploy frequency, build success ratio, build time, stale PRs |
 | **Infrastructure** | K8s deployments, container images, deploy targets, CI/CD complexity |
-| **Code** | Dependencies |
+| **Code** | Dependencies, large-file ratio |
 
 **Scoring approach:**
 1. Normalize each metric to 0-100 scale
 2. Calculate dimension score = weighted average of metrics in dimension
 3. Calculate overall score = weighted average of dimension scores
+4. Floor the overall grade: it can't beat the worst critical-dimension grade (security) by more than one letter, so strong delivery can't mask an insecure codebase
 
 **Rationale:**
 - Users can see which dimension is dragging score down
 - Weights are configurable per project
 - Transparent — users understand why score is what it is
+- The grade floor keeps a weak critical dimension visible instead of averaged away
 
 ---
 
