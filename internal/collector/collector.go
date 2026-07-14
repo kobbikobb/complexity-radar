@@ -3,6 +3,7 @@ package collector
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/kobbikobb/complexity-radar/internal/config"
 	"github.com/kobbikobb/complexity-radar/internal/model"
@@ -15,6 +16,7 @@ type RepositoryResult struct {
 	Metrics      map[model.MetricTypeName]float64
 	Dimensions   []scorer.DimensionResult
 	OverallScore float64
+	CollectedAt  time.Time
 	Errors       []string
 }
 
@@ -98,6 +100,7 @@ func Collect(ctx context.Context, cfg *config.Config, s *store.Store, project *m
 			}
 
 			repoResult.Metrics[m.Type] = m.Value
+			repoResult.CollectedAt = dbMetric.CollectedAt
 		}
 
 		scoreResult := scorer.Score(repoResult.Metrics, weights)

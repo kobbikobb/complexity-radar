@@ -3,6 +3,7 @@ package report
 import (
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/kobbikobb/complexity-radar/internal/collector"
 	"github.com/kobbikobb/complexity-radar/internal/config"
@@ -45,7 +46,7 @@ func BuildFromResult(result collector.CollectionResult, cfg *config.Config) []te
 			OverallScore:       repoResult.OverallScore,
 			Dimensions:         dimReports,
 			Metrics:            metricReports,
-			CollectedAt:        repoResult.Repository.CreatedAt,
+			CollectedAt:        repoResult.CollectedAt,
 		})
 	}
 	return reports
@@ -73,12 +74,16 @@ func BuildFromDB(store Store, project model.Project, cfg *config.Config, warn io
 		}
 
 		rawMetrics := make(map[model.MetricTypeName]float64)
+		var collectedAt time.Time
 		for _, m := range metrics {
 			mt, err := store.GetMetricTypeByID(m.MetricTypeID)
 			if err != nil {
 				continue
 			}
 			rawMetrics[mt.Name] = m.Value
+			if m.CollectedAt.After(collectedAt) {
+				collectedAt = m.CollectedAt
+			}
 		}
 
 		scoreResult := scorer.Score(rawMetrics, weights)
@@ -107,6 +112,7 @@ func BuildFromDB(store Store, project model.Project, cfg *config.Config, warn io
 			OverallScore:       scoreResult.Overall,
 			Dimensions:         dimReports,
 			Metrics:            metricReports,
+			CollectedAt:        collectedAt,
 		})
 	}
 
