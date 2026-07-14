@@ -672,6 +672,53 @@ func TestCollectDeployFrequencyReleasesMethod(t *testing.T) {
 	}
 }
 
+func TestCollectDeployFrequencyReleaseOptions(t *testing.T) {
+	now := time.Now()
+	recent := now.Add(-2 * 24 * time.Hour).Format(time.RFC3339)
+	releases := []Release{
+		{TagName: "v1.0.0", PublishedAt: recent},
+		{TagName: "v1.1.0-rc1", PublishedAt: recent, Prerelease: true},
+		{TagName: "app-2.0.0", PublishedAt: recent},
+	}
+	data, _ := json.Marshal(releases)
+
+	collect := func(includePrereleases bool, tagPrefix string) float64 {
+		responses := defaultResponses()
+		responses["/repos/org/repo/releases"] = data
+		responses["/repos/org/repo/git/trees/main"] = makeTreeJSON(nil)
+
+		client := &mockClient{responses: responses}
+		src := NewSourceWithClient(client)
+		repo := model.Repository{
+			URL:                "github.com/org/repo",
+			Branch:             "main",
+			DeployDetection:    config.DeployDetectionReleases,
+			IncludePrereleases: includePrereleases,
+			ReleaseTagPrefix:   tagPrefix,
+		}
+
+		metrics, err := src.Collect(context.Background(), repo)
+		if err != nil {
+			t.Fatalf("Collect: %v", err)
+		}
+		m, ok := findMetric(metrics, model.MetricTypeDeployFrequency)
+		if !ok {
+			t.Fatal("missing deploy_frequency metric")
+		}
+		return m.Value
+	}
+
+	if got := collect(false, ""); got != 2 {
+		t.Errorf("default excludes prerelease: got %v, want 2", got)
+	}
+	if got := collect(true, ""); got != 3 {
+		t.Errorf("includes prerelease: got %v, want 3", got)
+	}
+	if got := collect(true, "v"); got != 2 {
+		t.Errorf("tag prefix filters non-matching: got %v, want 2", got)
+	}
+}
+
 func TestParsePackageJSON(t *testing.T) {
 	content := `{"dependencies": {"a": "1", "b": "2"}, "devDependencies": {"c": "3"}}`
 	count, err := parsePackageJSON(content)

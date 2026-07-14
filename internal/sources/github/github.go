@@ -88,7 +88,7 @@ func (s *Source) Collect(ctx context.Context, repo model.Repository) ([]model.So
 	}
 	metrics = append(metrics, buildSuccessRatio(runs), buildTime(runs))
 
-	m, err = s.collectDeployFrequency(ctx, owner, name, repo.GitopsRepoURL, repo.DeployDetection)
+	m, err = s.collectDeployFrequency(ctx, owner, name, repo.GitopsRepoURL, repo.DeployDetection, repo.IncludePrereleases, repo.ReleaseTagPrefix)
 	if err != nil {
 		return nil, fmt.Errorf("collecting deploy frequency: %w", err)
 	}

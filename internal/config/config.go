@@ -18,10 +18,12 @@ type ProjectConfig struct {
 }
 
 type RepositoryConfig struct {
-	URL             string
-	Branch          string
-	GitopsRepoURL   string
-	DeployDetection string
+	URL                string
+	Branch             string
+	GitopsRepoURL      string
+	DeployDetection    string
+	IncludePrereleases bool
+	ReleaseTagPrefix   string
 }
 
 const (

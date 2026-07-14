@@ -179,6 +179,32 @@ func TestRepositoryDeployDetectionRoundTrip(t *testing.T) {
 	}
 }
 
+func TestRepositoryReleaseOptionsRoundTrip(t *testing.T) {
+	s := newTestStore(t)
+
+	p := &model.Project{Name: "Parent"}
+	if err := s.CreateProject(p); err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+
+	r := &model.Repository{ProjectID: p.ID, URL: "github.com/org/repo", IncludePrereleases: true, ReleaseTagPrefix: "v"}
+	if err := s.CreateRepository(r); err != nil {
+		t.Fatalf("CreateRepository: %v", err)
+	}
+
+	got, err := s.GetRepository(r.ID)
+	if err != nil {
+		t.Fatalf("GetRepository: %v", err)
+	}
+
+	if !got.IncludePrereleases {
+		t.Errorf("include_prereleases = %v, want true", got.IncludePrereleases)
+	}
+	if got.ReleaseTagPrefix != "v" {
+		t.Errorf("release_tag_prefix = %q, want %q", got.ReleaseTagPrefix, "v")
+	}
+}
+
 func TestCreateRepositoryDefaultsDeployDetection(t *testing.T) {
 	s := newTestStore(t)
 
