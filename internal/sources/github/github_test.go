@@ -245,6 +245,29 @@ func TestCollectDeployFrequency(t *testing.T) {
 	}
 }
 
+func TestCollectDeployFrequencyNoReleasesIsNoData(t *testing.T) {
+	responses := defaultResponses()
+	responses["/repos/org/repo/releases"] = []byte("[]")
+	responses["/repos/org/repo/git/trees/main"] = makeTreeJSON(nil)
+
+	client := &mockClient{responses: responses}
+	src := NewSourceWithClient(client)
+	repo := model.Repository{URL: "github.com/org/repo", Branch: "main"}
+
+	metrics, err := src.Collect(context.Background(), repo)
+	if err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	m, ok := findMetric(metrics, model.MetricTypeDeployFrequency)
+	if !ok {
+		t.Fatal("missing deploy_frequency metric")
+	}
+	if m.Value != noDataValue {
+		t.Errorf("deploy frequency = %v, want noDataValue %v", m.Value, noDataValue)
+	}
+}
+
 func TestCollectStalePRs(t *testing.T) {
 	now := time.Now()
 	prs := []PullRequest{

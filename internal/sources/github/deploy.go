@@ -76,6 +76,9 @@ func (s *Source) collectTagDeployFrequency(ctx context.Context, owner, name, tag
 			matched = append(matched, t)
 		}
 	}
+	if len(matched) == 0 {
+		return []model.SourceMetric{{Type: model.MetricTypeDeployFrequency, Value: noDataValue}}, nil
+	}
 	if len(matched) > maxTagCommits {
 		log.Printf("warning: %d tags matched, capping commit lookups at %d", len(matched), maxTagCommits)
 		matched = matched[:maxTagCommits]
@@ -147,6 +150,9 @@ func (s *Source) collectReleaseDeployFrequency(ctx context.Context, owner, name 
 	var releases []Release
 	if err := json.Unmarshal(data, &releases); err != nil {
 		return nil, fmt.Errorf("parsing releases: %w", err)
+	}
+	if len(releases) == 0 {
+		return []model.SourceMetric{{Type: model.MetricTypeDeployFrequency, Value: noDataValue}}, nil
 	}
 
 	now := time.Now()
