@@ -543,3 +543,47 @@ type testError struct {
 }
 
 func (e *testError) Error() string { return e.msg }
+
+type stubStore struct {
+	metrics []model.Metric
+	types   map[int64]model.MetricType
+}
+
+func (s *stubStore) ListRepositories(_ int64) ([]model.Repository, error) {
+	return []model.Repository{{ID: 1, URL: "github.com/org/repo"}}, nil
+}
+func (s *stubStore) GetMetricsByRepository(_ int64) ([]model.Metric, error) { return s.metrics, nil }
+func (s *stubStore) GetMetricTypeByID(id int64) (*model.MetricType, error) {
+	mt := s.types[id]
+	return &mt, nil
+}
+func (s *stubStore) GetMetricTypeByName(_ model.MetricTypeName) (*model.MetricType, error) {
+	return nil, nil
+}
+
+func TestBuildFromDBExcludesUnknownMetricTypes(t *testing.T) {
+	stub := &stubStore{
+		metrics: []model.Metric{
+			{RepositoryID: 1, MetricTypeID: 1, Value: 26},
+			{RepositoryID: 1, MetricTypeID: 2, Value: 960355}, // stale code_loc, removed from model
+		},
+		types: map[int64]model.MetricType{
+			1: {ID: 1, Name: model.MetricTypeDependencyCount, Dimension: model.DimensionCode, Unit: "count"},
+			2: {ID: 2, Name: model.MetricTypeName("code_loc"), Dimension: model.DimensionCode, Unit: "lines"},
+		},
+	}
+
+	reports, err := BuildFromDB(stub, model.Project{ID: 1, Name: "P"}, testConfig(), nil)
+	if err != nil {
+		t.Fatalf("BuildFromDB: %v", err)
+	}
+
+	for _, m := range reports[0].Metrics {
+		if m.Name == "code_loc" {
+			t.Error("stale code_loc metric leaked into report")
+		}
+	}
+	if len(reports[0].Metrics) != 1 {
+		t.Errorf("got %d metrics, want 1 (only dependency_count)", len(reports[0].Metrics))
+	}
+}
