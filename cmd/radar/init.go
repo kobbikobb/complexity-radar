@@ -200,7 +200,7 @@ func addRepository(reader *bufio.Reader, s *store.Store, projectID int64) (*mode
 
 	var includePrereleases bool
 	if method == config.DeployDetectionReleases {
-		includePrereleases, err = promptYesNo(reader, "Include prereleases as deploys?", false)
+		includePrereleases, err = promptYesNo(reader, "Count prereleases (betas/RCs) as deploys?", false)
 		if err != nil {
 			return nil, err
 		}
@@ -247,7 +247,7 @@ func editRepository(reader *bufio.Reader, s *store.Store, repo *model.Repository
 
 	var includePrereleases bool
 	if method == config.DeployDetectionReleases {
-		includePrereleases, err = promptYesNo(reader, "Include prereleases as deploys?", repo.IncludePrereleases)
+		includePrereleases, err = promptYesNo(reader, "Count prereleases (betas/RCs) as deploys?", repo.IncludePrereleases)
 		if err != nil {
 			return nil, err
 		}
@@ -295,7 +295,7 @@ func tagPrefixLabel(method string) string {
 	if method == config.DeployDetectionTags {
 		return "Only count tags matching prefix (optional, e.g. promote/)"
 	}
-	return "Only count releases with tag prefix (optional)"
+	return "Only count releases with tag prefix (optional, e.g. v)"
 }
 
 func promptYesNo(reader *bufio.Reader, label string, def bool) (bool, error) {
