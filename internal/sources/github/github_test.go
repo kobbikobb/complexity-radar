@@ -694,7 +694,7 @@ func TestCollectDeployFrequencyReleaseOptions(t *testing.T) {
 			Branch:             "main",
 			DeployDetection:    config.DeployDetectionReleases,
 			IncludePrereleases: includePrereleases,
-			ReleaseTagPrefix:   tagPrefix,
+			TagPrefix:          tagPrefix,
 		}
 
 		metrics, err := src.Collect(context.Background(), repo)
@@ -716,6 +716,54 @@ func TestCollectDeployFrequencyReleaseOptions(t *testing.T) {
 	}
 	if got := collect(true, "v"); got != 2 {
 		t.Errorf("tag prefix filters non-matching: got %v, want 2", got)
+	}
+}
+
+func TestCollectDeployFrequencyTags(t *testing.T) {
+	now := time.Now()
+	recent := now.Add(-2 * 24 * time.Hour).Format(time.RFC3339)
+	old := now.Add(-10 * 24 * time.Hour).Format(time.RFC3339)
+
+	tags := []Tag{
+		{Name: "promote/1"}, {Name: "promote/2"}, {Name: "release/1"},
+	}
+	tags[0].Commit.SHA = "sha1"
+	tags[1].Commit.SHA = "sha2"
+	tags[2].Commit.SHA = "sha3"
+	tagsData, _ := json.Marshal(tags)
+
+	commitJSON := func(date string) json.RawMessage {
+		return []byte(fmt.Sprintf(`{"commit":{"committer":{"date":%q}}}`, date))
+	}
+
+	collect := func(tagPrefix string) float64 {
+		responses := defaultResponses()
+		responses["/repos/org/repo/tags"] = tagsData
+		responses["/repos/org/repo/commits/sha1"] = commitJSON(recent)
+		responses["/repos/org/repo/commits/sha2"] = commitJSON(old)
+		responses["/repos/org/repo/commits/sha3"] = commitJSON(recent)
+		responses["/repos/org/repo/git/trees/main"] = makeTreeJSON(nil)
+
+		client := &mockClient{responses: responses}
+		src := NewSourceWithClient(client)
+		repo := model.Repository{URL: "github.com/org/repo", Branch: "main", DeployDetection: config.DeployDetectionTags, TagPrefix: tagPrefix}
+
+		metrics, err := src.Collect(context.Background(), repo)
+		if err != nil {
+			t.Fatalf("Collect: %v", err)
+		}
+		m, ok := findMetric(metrics, model.MetricTypeDeployFrequency)
+		if !ok {
+			t.Fatal("missing deploy_frequency metric")
+		}
+		return m.Value
+	}
+
+	if got := collect("promote/"); got != 1 {
+		t.Errorf("prefix promote/ counts recent matching tags: got %v, want 1", got)
+	}
+	if got := collect(""); got != 2 {
+		t.Errorf("empty prefix counts all recent tags: got %v, want 2", got)
 	}
 }
 

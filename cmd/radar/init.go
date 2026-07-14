@@ -193,12 +193,20 @@ func addRepository(reader *bufio.Reader, s *store.Store, projectID int64) (*mode
 		return nil, err
 	}
 
-	includePrereleases, err := promptYesNo(reader, "Include prereleases as deploys?", false)
+	method, err := promptDeployMethod(reader, config.DeployDetectionReleases)
 	if err != nil {
 		return nil, err
 	}
 
-	tagPrefix, err := prompt(reader, "Only count releases with tag prefix (optional)", "")
+	var includePrereleases bool
+	if method == config.DeployDetectionReleases {
+		includePrereleases, err = promptYesNo(reader, "Include prereleases as deploys?", false)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	tagPrefix, err := prompt(reader, tagPrefixLabel(method), "")
 	if err != nil {
 		return nil, err
 	}
@@ -207,8 +215,9 @@ func addRepository(reader *bufio.Reader, s *store.Store, projectID int64) (*mode
 		ProjectID:          projectID,
 		URL:                url,
 		Branch:             branch,
+		DeployDetection:    method,
 		IncludePrereleases: includePrereleases,
-		ReleaseTagPrefix:   tagPrefix,
+		TagPrefix:          tagPrefix,
 	}
 	if err := s.CreateRepository(repo); err != nil {
 		return nil, fmt.Errorf("creating repository: %w", err)
@@ -231,20 +240,29 @@ func editRepository(reader *bufio.Reader, s *store.Store, repo *model.Repository
 		return nil, err
 	}
 
-	includePrereleases, err := promptYesNo(reader, "Include prereleases as deploys?", repo.IncludePrereleases)
+	method, err := promptDeployMethod(reader, repo.DeployDetection)
 	if err != nil {
 		return nil, err
 	}
 
-	tagPrefix, err := prompt(reader, "Only count releases with tag prefix (optional)", repo.ReleaseTagPrefix)
+	var includePrereleases bool
+	if method == config.DeployDetectionReleases {
+		includePrereleases, err = promptYesNo(reader, "Include prereleases as deploys?", repo.IncludePrereleases)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	tagPrefix, err := prompt(reader, tagPrefixLabel(method), repo.TagPrefix)
 	if err != nil {
 		return nil, err
 	}
 
 	repo.URL = url
 	repo.Branch = branch
+	repo.DeployDetection = method
 	repo.IncludePrereleases = includePrereleases
-	repo.ReleaseTagPrefix = tagPrefix
+	repo.TagPrefix = tagPrefix
 
 	if err := s.UpdateRepository(repo); err != nil {
 		return nil, fmt.Errorf("updating repository: %w", err)
@@ -252,6 +270,32 @@ func editRepository(reader *bufio.Reader, s *store.Store, repo *model.Repository
 
 	fmt.Printf("Repository updated.\n")
 	return repo, nil
+}
+
+func promptDeployMethod(reader *bufio.Reader, current string) (string, error) {
+	fmt.Println("Deploy detection method:")
+	fmt.Println("  1. GitHub Releases")
+	fmt.Println("  2. Git tags")
+
+	def := "1"
+	if current == config.DeployDetectionTags {
+		def = "2"
+	}
+	choice, err := prompt(reader, "Select", def)
+	if err != nil {
+		return "", err
+	}
+	if choice == "2" {
+		return config.DeployDetectionTags, nil
+	}
+	return config.DeployDetectionReleases, nil
+}
+
+func tagPrefixLabel(method string) string {
+	if method == config.DeployDetectionTags {
+		return "Only count tags matching prefix (optional, e.g. promote/)"
+	}
+	return "Only count releases with tag prefix (optional)"
 }
 
 func promptYesNo(reader *bufio.Reader, label string, def bool) (bool, error) {

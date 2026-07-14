@@ -20,7 +20,18 @@ type Release struct {
 	Prerelease  bool   `json:"prerelease"`
 }
 
-const noDataValue = -1.0
+const (
+	noDataValue   = -1.0
+	maxTagCommits = 50
+)
+
+// Tag represents a GitHub tag.
+type Tag struct {
+	Name   string `json:"name"`
+	Commit struct {
+		SHA string `json:"sha"`
+	} `json:"commit"`
+}
 
 func (s *Source) collectDeployFrequency(ctx context.Context, owner, name, gitopsRepoURL, method string, includePrereleases bool, tagPrefix string) ([]model.SourceMetric, error) {
 	if gitopsRepoURL != "" {
@@ -28,20 +39,77 @@ func (s *Source) collectDeployFrequency(ctx context.Context, owner, name, gitops
 		if err == nil {
 			return metrics, nil
 		}
-		log.Printf("warning: gitops deploy frequency failed (%v), falling back to releases", err)
+		log.Printf("warning: gitops deploy frequency failed (%v), falling back to configured method", err)
 	}
 
-	if method != "" && method != config.DeployDetectionReleases {
-		log.Printf("warning: deploy detection method %q not implemented, using releases", method)
+	var metrics []model.SourceMetric
+	var err error
+	switch method {
+	case config.DeployDetectionTags:
+		metrics, err = s.collectTagDeployFrequency(ctx, owner, name, tagPrefix)
+	default:
+		metrics, err = s.collectReleaseDeployFrequency(ctx, owner, name, includePrereleases, tagPrefix)
 	}
-
-	metrics, err := s.collectReleaseDeployFrequency(ctx, owner, name, includePrereleases, tagPrefix)
 	if err != nil {
 		return []model.SourceMetric{
 			{Type: model.MetricTypeDeployFrequency, Value: noDataValue},
 		}, nil
 	}
 	return metrics, nil
+}
+
+func (s *Source) collectTagDeployFrequency(ctx context.Context, owner, name, tagPrefix string) ([]model.SourceMetric, error) {
+	endpoint := fmt.Sprintf("/repos/%s/%s/tags", owner, name)
+	data, err := s.client.GetPaginated(ctx, endpoint, map[string]string{"per_page": "100"}, 5)
+	if err != nil {
+		return nil, err
+	}
+
+	var tags []Tag
+	if err := json.Unmarshal(data, &tags); err != nil {
+		return nil, fmt.Errorf("parsing tags: %w", err)
+	}
+
+	var matched []Tag
+	for _, t := range tags {
+		if tagPrefix == "" || strings.HasPrefix(t.Name, tagPrefix) {
+			matched = append(matched, t)
+		}
+	}
+	if len(matched) > maxTagCommits {
+		log.Printf("warning: %d tags matched, capping commit lookups at %d", len(matched), maxTagCommits)
+		matched = matched[:maxTagCommits]
+	}
+
+	oneWeekAgo := time.Now().AddDate(0, 0, -7)
+	count := 0
+	for _, t := range matched {
+		commitData, err := s.client.Get(ctx, fmt.Sprintf("/repos/%s/%s/commits/%s", owner, name, t.Commit.SHA))
+		if err != nil {
+			continue
+		}
+		var commit struct {
+			Commit struct {
+				Committer struct {
+					Date string `json:"date"`
+				} `json:"committer"`
+			} `json:"commit"`
+		}
+		if err := json.Unmarshal(commitData, &commit); err != nil {
+			continue
+		}
+		date, err := time.Parse(time.RFC3339, commit.Commit.Committer.Date)
+		if err != nil {
+			continue
+		}
+		if date.After(oneWeekAgo) {
+			count++
+		}
+	}
+
+	return []model.SourceMetric{
+		{Type: model.MetricTypeDeployFrequency, Value: float64(count)},
+	}, nil
 }
 
 func (s *Source) collectGitopsDeployFrequency(ctx context.Context, gitopsRepoURL string) ([]model.SourceMetric, error) {
