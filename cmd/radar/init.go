@@ -71,6 +71,19 @@ func promptProject(reader *bufio.Reader, s *store.Store) (*model.Project, error)
 		for i, p := range existing {
 			fmt.Printf("  %d. %s\n", i+1, p.Name)
 		}
+
+		choice, err := prompt(reader, "\nSelect project number or press Enter to create new", "")
+		if err != nil {
+			return nil, err
+		}
+
+		if choice != "" {
+			var idx int
+			if _, err := fmt.Sscanf(choice, "%d", &idx); err == nil && idx >= 1 && idx <= len(existing) {
+				return &existing[idx-1], nil
+			}
+			fmt.Println("Invalid selection, creating new project.")
+		}
 	}
 
 	fmt.Println()
