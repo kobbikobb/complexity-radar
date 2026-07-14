@@ -18,10 +18,16 @@ type ProjectConfig struct {
 }
 
 type RepositoryConfig struct {
-	URL           string
-	Branch        string
-	GitopsRepoURL string
+	URL             string
+	Branch          string
+	GitopsRepoURL   string
+	DeployDetection string
 }
+
+const (
+	DeployDetectionReleases = "github-releases"
+	DeployDetectionTags     = "git-tags"
+)
 
 // WeightsConfig defines dimension weights for scoring (must sum to 1.0).
 type WeightsConfig struct {

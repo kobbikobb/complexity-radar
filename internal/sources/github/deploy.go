@@ -7,6 +7,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/kobbikobb/complexity-radar/internal/config"
 	"github.com/kobbikobb/complexity-radar/internal/model"
 )
 
@@ -20,13 +21,17 @@ type Release struct {
 
 const noDataValue = -1.0
 
-func (s *Source) collectDeployFrequency(ctx context.Context, owner, name, gitopsRepoURL string) ([]model.SourceMetric, error) {
+func (s *Source) collectDeployFrequency(ctx context.Context, owner, name, gitopsRepoURL, method string) ([]model.SourceMetric, error) {
 	if gitopsRepoURL != "" {
 		metrics, err := s.collectGitopsDeployFrequency(ctx, gitopsRepoURL)
 		if err == nil {
 			return metrics, nil
 		}
 		log.Printf("warning: gitops deploy frequency failed (%v), falling back to releases", err)
+	}
+
+	if method != "" && method != config.DeployDetectionReleases {
+		log.Printf("warning: deploy detection method %q not implemented, using releases", method)
 	}
 
 	metrics, err := s.collectReleaseDeployFrequency(ctx, owner, name)
