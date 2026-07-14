@@ -74,9 +74,9 @@ func TestNormalizeMetricHigherIsBetter(t *testing.T) {
 		{"full build_success_ratio", model.MetricTypeBuildSuccessRatio, 1.0, 100},
 
 		{"zero deploy_frequency", model.MetricTypeDeployFrequency, 0, 0},
-		{"half refMax deploy_frequency", model.MetricTypeDeployFrequency, 7, 50},
-		{"at refMax deploy_frequency", model.MetricTypeDeployFrequency, 14, 100},
-		{"over refMax deploy_frequency clamps to 100", model.MetricTypeDeployFrequency, 28, 100},
+		{"half refMax deploy_frequency", model.MetricTypeDeployFrequency, 2.5, 50},
+		{"at refMax deploy_frequency", model.MetricTypeDeployFrequency, 5, 100},
+		{"over refMax deploy_frequency clamps to 100", model.MetricTypeDeployFrequency, 10, 100},
 	}
 
 	for _, tt := range tests {
@@ -449,7 +449,7 @@ func TestScoreBoundaryValues(t *testing.T) {
 		model.MetricTypeDeployTargets:           0,   // 100
 		model.MetricTypeDependencyCount:         0,   // 100
 		model.MetricTypeBuildSuccessRatio:       1.0, // 100
-		model.MetricTypeDeployFrequency:         14,  // 100
+		model.MetricTypeDeployFrequency:         5,   // 100
 		model.MetricTypeCICDComplexity:          0,   // 0 (raw, not health)
 	}
 	result := ScoreWithDefaults(bestMetrics)

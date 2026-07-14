@@ -15,7 +15,7 @@ const (
 	refDeployTargets           = 50.0
 	refDependencyCount         = 500.0
 	refCodeLOC                 = 100000.0
-	refDeployFrequency         = 14.0
+	refDeployFrequency         = 5.0 // weekday deploy = full marks, not CD cadence
 	refCICDComplexity          = 500.0
 	refSecurityCritical        = 5.0
 	refSecurityHigh            = 10.0
