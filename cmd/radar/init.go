@@ -273,7 +273,7 @@ func editRepository(reader *bufio.Reader, s *store.Store, repo *model.Repository
 }
 
 func promptDeployMethod(reader *bufio.Reader, current string) (string, error) {
-	fmt.Println("Deploy detection method:")
+	fmt.Println("How are deployments detected?")
 	fmt.Println("  1. GitHub Releases")
 	fmt.Println("  2. Git tags")
 
