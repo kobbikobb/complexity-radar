@@ -18,6 +18,8 @@ type Report struct {
 	Metrics            []MetricReport
 	CollectedAt        time.Time
 	Errors             []string
+	HasTrend           bool
+	OverallDelta       float64
 }
 
 type DimensionReport struct {
@@ -26,6 +28,7 @@ type DimensionReport struct {
 	Weight      float64
 	MetricCount int
 	Breakdown   string
+	Delta       float64
 }
 
 type MetricReport struct {
@@ -96,7 +99,19 @@ func SecurityBreakdown(metrics map[model.MetricTypeName]float64) string {
 }
 
 type TerminalFormatter struct {
-	UseColor bool
+	UseColor  bool
+	ShowTrend bool
+}
+
+func formatDelta(v float64) string {
+	switch {
+	case v > 0:
+		return fmt.Sprintf("▲ +%.1f", v)
+	case v < 0:
+		return fmt.Sprintf("▼ %.1f", v)
+	default:
+		return "▬ 0.0"
+	}
 }
 
 func New() *TerminalFormatter {
@@ -116,8 +131,14 @@ func (f *TerminalFormatter) Format(report Report) string {
 	}
 	b.WriteString("\n")
 
+	trend := f.ShowTrend && report.HasTrend
+
 	b.WriteString("───────────────────────────────────────────────────\n")
-	fmt.Fprintf(&b, "  OVERALL SCORE: %s [%s]\n", f.colorScore(report.OverallScore), overallGrade(report.OverallScore, report.Dimensions))
+	fmt.Fprintf(&b, "  OVERALL SCORE: %s [%s]", f.colorScore(report.OverallScore), overallGrade(report.OverallScore, report.Dimensions))
+	if trend {
+		fmt.Fprintf(&b, "   %s vs previous", formatDelta(report.OverallDelta))
+	}
+	b.WriteString("\n")
 	b.WriteString("───────────────────────────────────────────────────\n")
 	b.WriteString("  Scores 0–100, higher is healthier.\n")
 	b.WriteString("  A ≥90   B ≥75   C ≥60   D ≥40   F <40\n")
@@ -131,8 +152,15 @@ func (f *TerminalFormatter) Format(report Report) string {
 	for _, d := range report.Dimensions {
 		weight := fmt.Sprintf("%.1f%%", d.Weight)
 		row := tableRow(dimWidths, string(d.Dimension), f.colorScore(d.Score), weight, fmt.Sprintf("  %s  ", scoreGrade(d.Score)))
+		suffix := ""
+		if trend {
+			suffix += "  " + formatDelta(d.Delta)
+		}
 		if d.Breakdown != "" {
-			row = strings.TrimRight(row, "\n") + "  — " + d.Breakdown + "\n"
+			suffix += "  — " + d.Breakdown
+		}
+		if suffix != "" {
+			row = strings.TrimRight(row, "\n") + suffix + "\n"
 		}
 		b.WriteString(row)
 	}

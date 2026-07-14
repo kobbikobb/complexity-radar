@@ -373,6 +373,72 @@ func TestBuildFromDBWithMultipleMetrics(t *testing.T) {
 	}
 }
 
+func TestBuildFromDBNoTrendOnFirstCollection(t *testing.T) {
+	s := newTestStore(t)
+
+	p := &model.Project{Name: "Trend"}
+	if err := s.CreateProject(p); err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	r := &model.Repository{ProjectID: p.ID, URL: "github.com/org/repo", Branch: "main"}
+	if err := s.CreateRepository(r); err != nil {
+		t.Fatalf("CreateRepository: %v", err)
+	}
+	createMetric(t, s, r.ID, model.MetricTypeSecurityVulnerabilities, 10)
+
+	reports, err := BuildFromDB(s, *p, testConfig(), nil)
+	if err != nil {
+		t.Fatalf("BuildFromDB: %v", err)
+	}
+
+	if reports[0].HasTrend {
+		t.Error("HasTrend = true on first collection, want false")
+	}
+}
+
+func TestBuildFromDBComputesTrendDelta(t *testing.T) {
+	s := newTestStore(t)
+
+	p := &model.Project{Name: "Trend"}
+	if err := s.CreateProject(p); err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	r := &model.Repository{ProjectID: p.ID, URL: "github.com/org/repo", Branch: "main"}
+	if err := s.CreateRepository(r); err != nil {
+		t.Fatalf("CreateRepository: %v", err)
+	}
+	createMetric(t, s, r.ID, model.MetricTypeSecurityVulnerabilities, 10) // previous: worse
+	createMetric(t, s, r.ID, model.MetricTypeSecurityVulnerabilities, 0)  // latest: no vulns
+
+	reports, err := BuildFromDB(s, *p, testConfig(), nil)
+	if err != nil {
+		t.Fatalf("BuildFromDB: %v", err)
+	}
+
+	if !reports[0].HasTrend {
+		t.Fatal("HasTrend = false, want true after two collections")
+	}
+	if reports[0].OverallDelta <= 0 {
+		t.Errorf("OverallDelta = %v, want > 0 (security improved)", reports[0].OverallDelta)
+	}
+	for _, d := range reports[0].Dimensions {
+		if d.Dimension == model.DimensionSecurity && d.Delta <= 0 {
+			t.Errorf("security delta = %v, want > 0", d.Delta)
+		}
+	}
+}
+
+func createMetric(t *testing.T, s *store.Store, repoID int64, name model.MetricTypeName, value float64) {
+	t.Helper()
+	mt, err := s.GetMetricTypeByName(name)
+	if err != nil {
+		t.Fatalf("GetMetricTypeByName(%s): %v", name, err)
+	}
+	if err := s.CreateMetric(&model.Metric{RepositoryID: repoID, MetricTypeID: mt.ID, Value: value}); err != nil {
+		t.Fatalf("CreateMetric(%s): %v", name, err)
+	}
+}
+
 func TestBuildFromDBNoRepositories(t *testing.T) {
 	s := newTestStore(t)
 
