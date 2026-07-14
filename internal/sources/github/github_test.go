@@ -698,6 +698,77 @@ func TestCollectTagDeployFrequency(t *testing.T) {
 	}
 }
 
+func TestTagFallbackToReleases(t *testing.T) {
+	releaseData := []map[string]interface{}{
+		{"tag_name": "v2.0.0", "published_at": time.Now().AddDate(0, 0, -1).Format(time.RFC3339), "draft": false, "prerelease": false},
+	}
+	releasesJSON, _ := json.Marshal(releaseData)
+
+	responses := defaultResponses()
+	responses["/repos/org/repo/tags"] = nil
+	responses["/repos/org/repo/releases"] = releasesJSON
+	responses["/repos/org/repo/git/trees/main"] = makeTreeJSON(nil)
+
+	client := &mockClient{
+		responses: responses,
+		errors:    map[string]error{"/repos/org/repo/tags": fmt.Errorf("API error")},
+	}
+	src := NewSourceWithClient(client)
+	repo := model.Repository{
+		URL:              "github.com/org/repo",
+		Branch:           "main",
+		DeployTagPattern: "deploy/",
+	}
+
+	metrics, err := src.Collect(context.Background(), repo)
+	if err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	m, ok := findMetric(metrics, model.MetricTypeDeployFrequency)
+	if !ok {
+		t.Fatal("missing deploy_frequency metric")
+	}
+	// Tag API failed, fell through to releases: 1 release in last 7 days
+	if m.Value != 1 {
+		t.Errorf("deploy frequency = %v, want 1 (fell through to releases)", m.Value)
+	}
+}
+
+func TestTagNoMatchReturnsZero(t *testing.T) {
+	tags := []map[string]interface{}{
+		{"name": "v1.0.0", "commit": map[string]string{"sha": "abc123"}},
+		{"name": "v2.0.0", "commit": map[string]string{"sha": "def456"}},
+	}
+	tagsData, _ := json.Marshal(tags)
+
+	responses := defaultResponses()
+	responses["/repos/org/repo/tags"] = tagsData
+	responses["/repos/org/repo/git/trees/main"] = makeTreeJSON(nil)
+
+	client := &mockClient{responses: responses}
+	src := NewSourceWithClient(client)
+	repo := model.Repository{
+		URL:              "github.com/org/repo",
+		Branch:           "main",
+		DeployTagPattern: "deploy/",
+	}
+
+	metrics, err := src.Collect(context.Background(), repo)
+	if err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	m, ok := findMetric(metrics, model.MetricTypeDeployFrequency)
+	if !ok {
+		t.Fatal("missing deploy_frequency metric")
+	}
+	// No tags match "deploy/" prefix → 0
+	if m.Value != 0 {
+		t.Errorf("deploy frequency = %v, want 0 (no matching tags)", m.Value)
+	}
+}
+
 func TestParsePackageJSON(t *testing.T) {
 	content := `{"dependencies": {"a": "1", "b": "2"}, "devDependencies": {"c": "3"}}`
 	count, err := parsePackageJSON(content)

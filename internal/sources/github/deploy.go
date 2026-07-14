@@ -73,9 +73,11 @@ func (s *Source) collectGitopsDeployFrequency(ctx context.Context, gitopsRepoURL
 	}, nil
 }
 
+const maxTagsToCheck = 50
+
 func (s *Source) collectTagDeployFrequency(ctx context.Context, owner, name, tagPattern string) ([]sources.SourceMetric, error) {
 	endpoint := fmt.Sprintf("/repos/%s/%s/tags", owner, name)
-	data, err := s.client.Get(ctx, endpoint)
+	data, err := s.client.GetPaginated(ctx, endpoint, map[string]string{"per_page": "100"}, 5)
 	if err != nil {
 		return nil, err
 	}
@@ -90,15 +92,27 @@ func (s *Source) collectTagDeployFrequency(ctx context.Context, owner, name, tag
 		return nil, fmt.Errorf("parsing tags: %w", err)
 	}
 
+	var matching []struct {
+		Name   string `json:"name"`
+		Commit struct {
+			SHA string `json:"sha"`
+		} `json:"commit"`
+	}
+	for _, tag := range tags {
+		if strings.HasPrefix(tag.Name, tagPattern) {
+			matching = append(matching, tag)
+		}
+	}
+
+	if len(matching) > maxTagsToCheck {
+		matching = matching[:maxTagsToCheck]
+	}
+
 	now := time.Now()
 	oneWeekAgo := now.AddDate(0, 0, -7)
 	weekCount := 0
 
-	for _, tag := range tags {
-		if !strings.HasPrefix(tag.Name, tagPattern) {
-			continue
-		}
-
+	for _, tag := range matching {
 		commitEndpoint := fmt.Sprintf("/repos/%s/%s/commits/%s", owner, name, tag.Commit.SHA)
 		commitData, err := s.client.Get(ctx, commitEndpoint)
 		if err != nil {
