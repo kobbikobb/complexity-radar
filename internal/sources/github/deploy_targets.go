@@ -10,28 +10,29 @@ import (
 
 func collectDeployTargets(ctx context.Context, client APIClient, owner, name, branch string, tree *GitTree) []sources.SourceMetric {
 	targets := make(map[string]bool)
+	workflowCount := 0
 
-	// Check GitHub Actions workflows
-	collectTargetsFromWorkflows(ctx, client, owner, name, branch, tree, targets)
-
-	// Check common deploy config files
-	collectTargetsFromDeployConfigs(ctx, client, owner, name, branch, targets)
-
-	return []sources.SourceMetric{
-		{Type: model.MetricTypeDeployTargets, Value: float64(len(targets))},
-	}
-}
-
-func collectTargetsFromWorkflows(ctx context.Context, client APIClient, owner, name, branch string, tree *GitTree, targets map[string]bool) {
 	for _, entry := range tree.Tree {
 		if strings.HasPrefix(entry.Path, ".github/workflows/") &&
 			(strings.HasSuffix(entry.Path, ".yml") || strings.HasSuffix(entry.Path, ".yaml")) {
+			workflowCount++
 			content, err := client.GetFileContent(ctx, owner, name, entry.Path, branch)
 			if err != nil {
 				continue
 			}
 			parseWorkflowEnvironments(content, targets)
 		}
+	}
+
+	collectTargetsFromDeployConfigs(ctx, client, owner, name, branch, targets)
+
+	divisor := workflowCount
+	if divisor == 0 {
+		divisor = 1
+	}
+
+	return []sources.SourceMetric{
+		{Type: model.MetricTypeDeployTargets, Value: float64(len(targets)) / float64(divisor)},
 	}
 }
 

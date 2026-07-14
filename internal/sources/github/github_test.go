@@ -70,6 +70,7 @@ func defaultResponses() map[string]json.RawMessage {
 		"/repos/org/repo/actions/runs":      []byte(`{"workflow_runs": []}`),
 		"/repos/org/repo/releases":          []byte(`[]`),
 		"/repos/org/repo/pulls":             []byte(`[]`),
+		"/repos/org/repo/languages":         []byte(`{}`),
 	}
 }
 
@@ -77,10 +78,12 @@ func defaultResponses() map[string]json.RawMessage {
 func makeTreeJSON(paths []string) json.RawMessage {
 	type entry struct {
 		Path string `json:"path"`
+		Size int64  `json:"size"`
+		Type string `json:"type"`
 	}
 	var tree []entry
 	for _, p := range paths {
-		tree = append(tree, entry{Path: p})
+		tree = append(tree, entry{Path: p, Size: 100, Type: "blob"})
 	}
 	data, _ := json.Marshal(struct {
 		Tree []entry `json:"tree"`
@@ -302,11 +305,17 @@ func TestSupportedMetrics(t *testing.T) {
 
 	expected := []model.MetricTypeName{
 		model.MetricTypeSecurityVulnerabilities,
+		model.MetricTypeSecurityCritical,
+		model.MetricTypeSecurityHigh,
+		model.MetricTypeSecurityMedium,
+		model.MetricTypeSecurityLow,
 		model.MetricTypeBuildSuccessRatio,
 		model.MetricTypeBuildTime,
 		model.MetricTypeDeployFrequency,
 		model.MetricTypeStalePRs,
 		model.MetricTypeDependencyCount,
+		model.MetricTypeCodeLOC,
+		model.MetricTypeCodeComplexity,
 		model.MetricTypeK8sDeployments,
 		model.MetricTypeContainerImages,
 		model.MetricTypeDeployTargets,
@@ -334,7 +343,7 @@ func TestCollectDependencyCount(t *testing.T) {
 		responses:    defaultResponses(),
 		fileContents: map[string]string{"package.json": packageJSON},
 	}
-	client.responses["/repos/org/repo/git/trees/main"] = makeTreeJSON(nil)
+	client.responses["/repos/org/repo/git/trees/main"] = makeTreeJSON([]string{"package.json"})
 
 	src := NewSourceWithClient(client)
 	repo := model.Repository{URL: "github.com/org/repo", Branch: "main"}
@@ -367,7 +376,7 @@ require (
 		responses:    defaultResponses(),
 		fileContents: map[string]string{"go.mod": goMod},
 	}
-	client.responses["/repos/org/repo/git/trees/main"] = makeTreeJSON(nil)
+	client.responses["/repos/org/repo/git/trees/main"] = makeTreeJSON([]string{"go.mod"})
 
 	src := NewSourceWithClient(client)
 	repo := model.Repository{URL: "github.com/org/repo", Branch: "main"}
@@ -544,6 +553,93 @@ func TestCollectK8sDeployments(t *testing.T) {
 	}
 	if m.Value != 3 {
 		t.Errorf("k8s deployments = %v, want 3", m.Value)
+	}
+}
+
+func TestCollectCodeLOC(t *testing.T) {
+	languages := `{"Go": 5000, "JavaScript": 10000}`
+
+	responses := defaultResponses()
+	responses["/repos/org/repo/languages"] = []byte(languages)
+	responses["/repos/org/repo/git/trees/main"] = makeTreeJSON(nil)
+
+	client := &mockClient{responses: responses}
+	src := NewSourceWithClient(client)
+	repo := model.Repository{URL: "github.com/org/repo", Branch: "main"}
+
+	metrics, err := src.Collect(context.Background(), repo)
+	if err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	m, ok := findMetric(metrics, model.MetricTypeCodeLOC)
+	if !ok {
+		t.Fatal("missing code_loc metric")
+	}
+	// (5000 + 10000) / 50 = 300
+	if m.Value != 300 {
+		t.Errorf("code LOC = %v, want 300", m.Value)
+	}
+}
+
+func TestCollectCodeComplexity(t *testing.T) {
+	languages := `{"Go": 10000, "TypeScript": 5000}`
+
+	responses := defaultResponses()
+	responses["/repos/org/repo/languages"] = []byte(languages)
+	responses["/repos/org/repo/git/trees/main"] = makeTreeJSON([]string{
+		"main.go", "handler.go", "utils.go",
+	})
+
+	client := &mockClient{responses: responses}
+	src := NewSourceWithClient(client)
+	repo := model.Repository{URL: "github.com/org/repo", Branch: "main"}
+
+	metrics, err := src.Collect(context.Background(), repo)
+	if err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	m, ok := findMetric(metrics, model.MetricTypeCodeComplexity)
+	if !ok {
+		t.Fatal("missing code_complexity metric")
+	}
+	// totalBytes=15000, fileCount=3, avg=5000
+	if m.Value != 5000 {
+		t.Errorf("code complexity = %v, want 5000", m.Value)
+	}
+}
+
+func TestCollectGitopsDeployFrequency(t *testing.T) {
+	commits := []map[string]string{
+		{"sha": "abc123"},
+		{"sha": "def456"},
+	}
+	data, _ := json.Marshal(commits)
+
+	responses := defaultResponses()
+	responses["/repos/org/gitops/commits"] = data
+	responses["/repos/org/repo/git/trees/main"] = makeTreeJSON(nil)
+
+	client := &mockClient{responses: responses}
+	src := NewSourceWithClient(client)
+	repo := model.Repository{
+		URL:           "github.com/org/repo",
+		Branch:        "main",
+		GitopsRepoURL: "github.com/org/gitops",
+	}
+
+	metrics, err := src.Collect(context.Background(), repo)
+	if err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	m, ok := findMetric(metrics, model.MetricTypeDeployFrequency)
+	if !ok {
+		t.Fatal("missing deploy_frequency metric")
+	}
+	if m.Value != 2 {
+		t.Errorf("deploy frequency = %v, want 2", m.Value)
 	}
 }
 

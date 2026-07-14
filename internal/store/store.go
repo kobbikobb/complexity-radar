@@ -69,6 +69,10 @@ func (s *Store) Close() error {
 }
 
 func (s *Store) migrate() error {
+	if _, err := s.db.Exec("CREATE TABLE IF NOT EXISTS schema_migrations (version TEXT PRIMARY KEY)"); err != nil {
+		return fmt.Errorf("creating migration tracking table: %w", err)
+	}
+
 	entries, err := migrationsFS.ReadDir("migrations")
 	if err != nil {
 		return fmt.Errorf("reading migrations directory: %w", err)
@@ -83,6 +87,14 @@ func (s *Store) migrate() error {
 	sort.Strings(upFiles)
 
 	for _, name := range upFiles {
+		var applied int
+		if err := s.db.QueryRow("SELECT COUNT(*) FROM schema_migrations WHERE version = ?", name).Scan(&applied); err != nil {
+			return fmt.Errorf("checking migration %s: %w", name, err)
+		}
+		if applied > 0 {
+			continue
+		}
+
 		data, err := migrationsFS.ReadFile("migrations/" + name)
 		if err != nil {
 			return fmt.Errorf("reading migration %s: %w", name, err)
@@ -90,6 +102,10 @@ func (s *Store) migrate() error {
 
 		if _, err := s.db.Exec(string(data)); err != nil {
 			return fmt.Errorf("executing migration %s: %w", name, err)
+		}
+
+		if _, err := s.db.Exec("INSERT INTO schema_migrations (version) VALUES (?)", name); err != nil {
+			return fmt.Errorf("recording migration %s: %w", name, err)
 		}
 	}
 
@@ -205,8 +221,8 @@ func (s *Store) DeleteProject(id int64) error {
 func (s *Store) CreateRepository(r *model.Repository) error {
 	now := time.Now().UTC().Format(time.RFC3339)
 	result, err := s.db.Exec(
-		"INSERT INTO repositories (project_id, url, branch, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-		r.ProjectID, r.URL, r.Branch, now, now,
+		"INSERT INTO repositories (project_id, url, branch, gitops_repo_url, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+		r.ProjectID, r.URL, r.Branch, r.GitopsRepoURL, now, now,
 	)
 	if err != nil {
 		return fmt.Errorf("inserting repository: %w", err)
@@ -227,8 +243,8 @@ func (s *Store) GetRepository(id int64) (*model.Repository, error) {
 	r := &model.Repository{}
 	var createdAt, updatedAt string
 	err := s.db.QueryRow(
-		"SELECT id, project_id, url, branch, created_at, updated_at FROM repositories WHERE id = ?", id,
-	).Scan(&r.ID, &r.ProjectID, &r.URL, &r.Branch, &createdAt, &updatedAt)
+		"SELECT id, project_id, url, branch, gitops_repo_url, created_at, updated_at FROM repositories WHERE id = ?", id,
+	).Scan(&r.ID, &r.ProjectID, &r.URL, &r.Branch, &r.GitopsRepoURL, &createdAt, &updatedAt)
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("repository %d not found", id)
 	}
@@ -249,7 +265,7 @@ func (s *Store) GetRepository(id int64) (*model.Repository, error) {
 
 func (s *Store) ListRepositories(projectID int64) ([]model.Repository, error) {
 	rows, err := s.db.Query(
-		"SELECT id, project_id, url, branch, created_at, updated_at FROM repositories WHERE project_id = ? ORDER BY id",
+		"SELECT id, project_id, url, branch, gitops_repo_url, created_at, updated_at FROM repositories WHERE project_id = ? ORDER BY id",
 		projectID,
 	)
 	if err != nil {
@@ -261,7 +277,7 @@ func (s *Store) ListRepositories(projectID int64) ([]model.Repository, error) {
 	for rows.Next() {
 		var r model.Repository
 		var createdAt, updatedAt string
-		if err := rows.Scan(&r.ID, &r.ProjectID, &r.URL, &r.Branch, &createdAt, &updatedAt); err != nil {
+		if err := rows.Scan(&r.ID, &r.ProjectID, &r.URL, &r.Branch, &r.GitopsRepoURL, &createdAt, &updatedAt); err != nil {
 			return nil, fmt.Errorf("scanning repository: %w", err)
 		}
 		r.CreatedAt, err = time.Parse(time.RFC3339, createdAt)
@@ -300,6 +316,15 @@ func (s *Store) EnsureMetricTypes() error {
 		)
 		if err != nil {
 			return fmt.Errorf("ensuring metric type %s: %w", mt.Name, err)
+		}
+	}
+	for _, mt := range model.DisplayMetricTypes() {
+		_, err := s.db.Exec(
+			"INSERT OR IGNORE INTO metric_types (name, dimension, unit) VALUES (?, ?, ?)",
+			string(mt.Name), string(mt.Dimension), mt.Unit,
+		)
+		if err != nil {
+			return fmt.Errorf("ensuring display metric type %s: %w", mt.Name, err)
 		}
 	}
 	return nil

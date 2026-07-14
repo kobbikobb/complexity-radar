@@ -19,13 +19,29 @@ var k8sManifestPrefixes = []string{
 
 func collectK8sDeployments(tree *GitTree) []sources.SourceMetric {
 	count := 0
+	subdirs := map[string]bool{}
 	for _, entry := range tree.Tree {
 		if isK8sManifestDir(entry.Path) && isK8sManifestFile(entry.Path) {
 			count++
+			for _, prefix := range k8sManifestPrefixes {
+				if strings.HasPrefix(entry.Path, prefix) {
+					rest := strings.TrimPrefix(entry.Path, prefix)
+					if idx := strings.Index(rest, "/"); idx >= 0 {
+						subdirs[prefix+rest[:idx]] = true
+					} else {
+						subdirs[prefix] = true
+					}
+					break
+				}
+			}
 		}
 	}
+	divisor := len(subdirs)
+	if divisor == 0 {
+		divisor = 1
+	}
 	return []sources.SourceMetric{
-		{Type: model.MetricTypeK8sDeployments, Value: float64(count)},
+		{Type: model.MetricTypeK8sDeployments, Value: float64(count) / float64(divisor)},
 	}
 }
 

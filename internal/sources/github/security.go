@@ -49,6 +49,10 @@ func (s *Source) collectSecurityVulnerabilities(ctx context.Context, owner, name
 
 	total := 0
 	weightedSum := 0.0
+	critCount := 0
+	highCount := 0
+	medCount := 0
+	lowCount := 0
 	for _, a := range alerts {
 		if a.State != "open" {
 			continue
@@ -60,12 +64,23 @@ func (s *Source) collectSecurityVulnerabilities(ctx context.Context, owner, name
 			sev = a.SecurityVulnerability.Severity
 		}
 		weightedSum += severityWeight(sev)
+		switch sev {
+		case "critical":
+			critCount++
+		case "high":
+			highCount++
+		case "medium":
+			medCount++
+		case "low":
+			lowCount++
+		}
 	}
 
 	return []sources.SourceMetric{
-		{
-			Type:  model.MetricTypeSecurityVulnerabilities,
-			Value: weightedSum,
-		},
+		{Type: model.MetricTypeSecurityVulnerabilities, Value: weightedSum},
+		{Type: model.MetricTypeSecurityCritical, Value: float64(critCount)},
+		{Type: model.MetricTypeSecurityHigh, Value: float64(highCount)},
+		{Type: model.MetricTypeSecurityMedium, Value: float64(medCount)},
+		{Type: model.MetricTypeSecurityLow, Value: float64(lowCount)},
 	}, nil
 }

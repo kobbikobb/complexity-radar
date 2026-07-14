@@ -23,24 +23,43 @@ var dependencyFiles = []struct {
 	{"Gemfile", parseGemfile},
 }
 
-func (s *Source) collectDependencyCount(ctx context.Context, owner, name, branch string) ([]sources.SourceMetric, error) {
+func collectDependencyCount(ctx context.Context, client APIClient, owner, name, branch string, tree *GitTree) ([]sources.SourceMetric, error) {
+	parseMap := map[string]func(string) (float64, error){}
 	for _, df := range dependencyFiles {
-		content, err := s.client.GetFileContent(ctx, owner, name, df.path, branch)
-		if err != nil {
-			continue // File not found, try next
+		parseMap[df.path] = df.parse
+	}
+
+	var total float64
+	var manifestCount int
+	for _, entry := range tree.Tree {
+		fileName := entry.Path
+		if idx := strings.LastIndex(fileName, "/"); idx >= 0 {
+			fileName = fileName[idx+1:]
 		}
-		count, err := df.parse(content)
-		if err != nil {
-			continue // Parse error, try next
+		parse, ok := parseMap[fileName]
+		if !ok {
+			continue
 		}
+		content, err := client.GetFileContent(ctx, owner, name, entry.Path, branch)
+		if err != nil {
+			continue
+		}
+		count, err := parse(content)
+		if err != nil {
+			continue
+		}
+		total += count
+		manifestCount++
+	}
+
+	if manifestCount == 0 {
 		return []sources.SourceMetric{
-			{Type: model.MetricTypeDependencyCount, Value: count},
+			{Type: model.MetricTypeDependencyCount, Value: 0},
 		}, nil
 	}
 
-	// No dependency file found
 	return []sources.SourceMetric{
-		{Type: model.MetricTypeDependencyCount, Value: 0},
+		{Type: model.MetricTypeDependencyCount, Value: total / float64(manifestCount)},
 	}, nil
 }
 

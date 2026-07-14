@@ -82,12 +82,16 @@ func runReport(cmd *cobra.Command, args []string) error {
 
 		dimReports := make([]output.DimensionReport, len(scoreResult.Dimensions))
 		for i, d := range scoreResult.Dimensions {
-			dimReports[i] = output.DimensionReport{
+			dr := output.DimensionReport{
 				Dimension:   d.Dimension,
 				Score:       d.Score,
 				Weight:      cfg.Weights.Weight(string(d.Dimension)) * 100,
 				MetricCount: d.MetricCount,
 			}
+			if d.Dimension == model.DimensionSecurity {
+				dr.Breakdown = output.SecurityBreakdown(rawMetrics)
+			}
+			dimReports[i] = dr
 		}
 
 		metricReports := make([]output.MetricReport, 0, len(rawMetrics))

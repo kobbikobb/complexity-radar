@@ -24,6 +24,12 @@ const (
 	MetricTypeDeployTargets           MetricTypeName = "deploy_targets"
 	MetricTypeCICDComplexity          MetricTypeName = "ci_cd_complexity"
 	MetricTypeDependencyCount         MetricTypeName = "dependency_count"
+	MetricTypeSecurityCritical        MetricTypeName = "security_critical"
+	MetricTypeSecurityHigh            MetricTypeName = "security_high"
+	MetricTypeSecurityMedium          MetricTypeName = "security_medium"
+	MetricTypeSecurityLow             MetricTypeName = "security_low"
+	MetricTypeCodeLOC                 MetricTypeName = "code_loc"
+	MetricTypeCodeComplexity          MetricTypeName = "code_complexity"
 )
 
 type MetricType struct {
@@ -45,6 +51,18 @@ func MetricTypes() []MetricType {
 		{Name: MetricTypeDeployTargets, Dimension: DimensionInfrastructure, Unit: "count"},
 		{Name: MetricTypeCICDComplexity, Dimension: DimensionInfrastructure, Unit: "score"},
 		{Name: MetricTypeDependencyCount, Dimension: DimensionCode, Unit: "count"},
+		{Name: MetricTypeCodeLOC, Dimension: DimensionCode, Unit: "lines"},
+		{Name: MetricTypeCodeComplexity, Dimension: DimensionCode, Unit: "bytes/file"},
+	}
+}
+
+// DisplayMetricTypes returns metric types used for display only (not scored).
+func DisplayMetricTypes() []MetricType {
+	return []MetricType{
+		{Name: MetricTypeSecurityCritical, Dimension: DimensionSecurity, Unit: "count"},
+		{Name: MetricTypeSecurityHigh, Dimension: DimensionSecurity, Unit: "count"},
+		{Name: MetricTypeSecurityMedium, Dimension: DimensionSecurity, Unit: "count"},
+		{Name: MetricTypeSecurityLow, Dimension: DimensionSecurity, Unit: "count"},
 	}
 }
 
@@ -57,12 +75,13 @@ type Project struct {
 }
 
 type Repository struct {
-	ID        int64
-	ProjectID int64
-	URL       string
-	Branch    string
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID            int64
+	ProjectID     int64
+	URL           string
+	Branch        string
+	GitopsRepoURL string
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
 }
 
 type Metric struct {

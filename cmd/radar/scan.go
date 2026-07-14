@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/kobbikobb/complexity-radar/internal/collector"
+	"github.com/kobbikobb/complexity-radar/internal/model"
 	"github.com/kobbikobb/complexity-radar/internal/output"
 	"github.com/kobbikobb/complexity-radar/internal/output/terminal"
 	"github.com/kobbikobb/complexity-radar/internal/scorer"
@@ -71,12 +72,16 @@ func runScan(cmd *cobra.Command, args []string) error {
 
 		dimReports := make([]output.DimensionReport, len(repoResult.Dimensions))
 		for i, d := range repoResult.Dimensions {
-			dimReports[i] = output.DimensionReport{
+			dr := output.DimensionReport{
 				Dimension:   d.Dimension,
 				Score:       d.Score,
 				Weight:      cfg.Weights.Weight(string(d.Dimension)) * 100,
 				MetricCount: d.MetricCount,
 			}
+			if d.Dimension == model.DimensionSecurity {
+				dr.Breakdown = output.SecurityBreakdown(repoResult.Metrics)
+			}
+			dimReports[i] = dr
 		}
 
 		metricReports := make([]output.MetricReport, 0, len(repoResult.Metrics))

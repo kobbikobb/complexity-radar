@@ -44,7 +44,11 @@ func (f *TerminalFormatter) Format(report output.Report) string {
 	b.WriteString(tableBorder(dimWidths, "├", "┼", "┤"))
 	for _, d := range report.Dimensions {
 		weight := fmt.Sprintf("%.1f%%", d.Weight)
-		b.WriteString(tableRow(dimWidths, string(d.Dimension), f.colorScore(d.Score), weight, fmt.Sprintf("  %s  ", output.ScoreGrade(d.Score))))
+		row := tableRow(dimWidths, string(d.Dimension), f.colorScore(d.Score), weight, fmt.Sprintf("  %s  ", output.ScoreGrade(d.Score)))
+		if d.Breakdown != "" {
+			row = strings.TrimRight(row, "\n") + "  — " + d.Breakdown + "\n"
+		}
+		b.WriteString(row)
 	}
 	b.WriteString(tableBorder(dimWidths, "└", "┴", "┘"))
 	b.WriteString("\n")
@@ -143,6 +147,9 @@ func formatUnit(unit string) string {
 }
 
 func formatRawValue(value float64, unit string) string {
+	if value == -1.0 {
+		return "—"
+	}
 	switch unit {
 	case "ratio":
 		return fmt.Sprintf("%.2f", value*100)
