@@ -123,17 +123,7 @@ func promptRepositories(reader *bufio.Reader, s *store.Store, projectID int64) (
 		for i, r := range existing {
 			fmt.Printf("  %d. %s (branch: %s)\n", i+1, r.URL, r.Branch)
 		}
-
-		addMore, err := prompt(reader, "\nAdd more repositories? (y/N)", "N")
-		if err != nil {
-			return nil, err
-		}
-		if strings.ToLower(addMore) != "y" {
-			return existing, nil
-		}
 	}
-
-	fmt.Println("\nAdd repositories (press Enter with empty URL to finish):")
 
 	var repos []model.Repository
 	for {
