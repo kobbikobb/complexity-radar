@@ -113,7 +113,20 @@ func promptProject(reader *bufio.Reader, s *store.Store) (*model.Project, error)
 }
 
 func promptRepositories(reader *bufio.Reader, s *store.Store, projectID int64) ([]model.Repository, error) {
-	fmt.Println("\nNow let's add your repositories.")
+	existing, err := s.ListRepositories(projectID)
+	if err != nil {
+		return nil, fmt.Errorf("listing repositories: %w", err)
+	}
+
+	if len(existing) > 0 {
+		fmt.Println("\nExisting repositories:")
+		for i, r := range existing {
+			fmt.Printf("  %d. %s (branch: %s)\n", i+1, r.URL, r.Branch)
+		}
+		fmt.Println()
+	}
+
+	fmt.Println("Add repositories (press Enter with empty URL to finish):")
 
 	var repos []model.Repository
 	for {
@@ -123,7 +136,7 @@ func promptRepositories(reader *bufio.Reader, s *store.Store, projectID int64) (
 			return nil, err
 		}
 		if url == "" {
-			if len(repos) == 0 {
+			if len(repos) == 0 && len(existing) == 0 {
 				fmt.Println("At least one repository is required.")
 				continue
 			}
