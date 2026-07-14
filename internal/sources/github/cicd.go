@@ -5,10 +5,9 @@ import (
 	"strings"
 
 	"github.com/kobbikobb/complexity-radar/internal/model"
-	"github.com/kobbikobb/complexity-radar/internal/sources"
 )
 
-func collectCICDComplexity(ctx context.Context, client APIClient, owner, name, branch string, tree *GitTree) []sources.SourceMetric {
+func collectCICDComplexity(ctx context.Context, client APIClient, owner, name, branch string, tree *GitTree) []model.SourceMetric {
 	score := 0.0
 
 	// Score GitHub Actions workflows
@@ -17,7 +16,12 @@ func collectCICDComplexity(ctx context.Context, client APIClient, owner, name, b
 	// Score other CI systems
 	score += scoreOtherCISystems(ctx, client, owner, name, branch)
 
-	return []sources.SourceMetric{
+	// Cap at 100
+	if score > 100 {
+		score = 100
+	}
+
+	return []model.SourceMetric{
 		{Type: model.MetricTypeCICDComplexity, Value: score},
 	}
 }

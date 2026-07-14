@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/kobbikobb/complexity-radar/internal/model"
-	"github.com/kobbikobb/complexity-radar/internal/sources"
 )
 
 // Release represents a GitHub release.
@@ -21,7 +20,7 @@ type Release struct {
 
 const noDataValue = -1.0
 
-func (s *Source) collectDeployFrequency(ctx context.Context, owner, name, gitopsRepoURL string) ([]sources.SourceMetric, error) {
+func (s *Source) collectDeployFrequency(ctx context.Context, owner, name, gitopsRepoURL string) ([]model.SourceMetric, error) {
 	if gitopsRepoURL != "" {
 		metrics, err := s.collectGitopsDeployFrequency(ctx, gitopsRepoURL)
 		if err == nil {
@@ -32,14 +31,14 @@ func (s *Source) collectDeployFrequency(ctx context.Context, owner, name, gitops
 
 	metrics, err := s.collectReleaseDeployFrequency(ctx, owner, name)
 	if err != nil {
-		return []sources.SourceMetric{
+		return []model.SourceMetric{
 			{Type: model.MetricTypeDeployFrequency, Value: noDataValue},
 		}, nil
 	}
 	return metrics, nil
 }
 
-func (s *Source) collectGitopsDeployFrequency(ctx context.Context, gitopsRepoURL string) ([]sources.SourceMetric, error) {
+func (s *Source) collectGitopsDeployFrequency(ctx context.Context, gitopsRepoURL string) ([]model.SourceMetric, error) {
 	gitopsOwner, gitopsName, err := parseRepoURL(gitopsRepoURL)
 	if err != nil {
 		return nil, fmt.Errorf("parsing gitops repo URL: %w", err)
@@ -59,12 +58,12 @@ func (s *Source) collectGitopsDeployFrequency(ctx context.Context, gitopsRepoURL
 		return nil, fmt.Errorf("parsing gitops commits: %w", err)
 	}
 
-	return []sources.SourceMetric{
+	return []model.SourceMetric{
 		{Type: model.MetricTypeDeployFrequency, Value: float64(len(commits))},
 	}, nil
 }
 
-func (s *Source) collectReleaseDeployFrequency(ctx context.Context, owner, name string) ([]sources.SourceMetric, error) {
+func (s *Source) collectReleaseDeployFrequency(ctx context.Context, owner, name string) ([]model.SourceMetric, error) {
 	endpoint := fmt.Sprintf("/repos/%s/%s/releases", owner, name)
 	data, err := s.client.Get(ctx, endpoint)
 	if err != nil {
@@ -93,7 +92,7 @@ func (s *Source) collectReleaseDeployFrequency(ctx context.Context, owner, name 
 		}
 	}
 
-	return []sources.SourceMetric{
+	return []model.SourceMetric{
 		{Type: model.MetricTypeDeployFrequency, Value: float64(weekCount)},
 	}, nil
 }

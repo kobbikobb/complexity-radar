@@ -5,10 +5,9 @@ import (
 	"strings"
 
 	"github.com/kobbikobb/complexity-radar/internal/model"
-	"github.com/kobbikobb/complexity-radar/internal/sources"
 )
 
-func collectDeployTargets(ctx context.Context, client APIClient, owner, name, branch string, tree *GitTree) []sources.SourceMetric {
+func collectDeployTargets(ctx context.Context, client APIClient, owner, name, branch string, tree *GitTree) []model.SourceMetric {
 	targets := make(map[string]bool)
 	workflowCount := 0
 
@@ -31,7 +30,7 @@ func collectDeployTargets(ctx context.Context, client APIClient, owner, name, br
 		divisor = 1
 	}
 
-	return []sources.SourceMetric{
+	return []model.SourceMetric{
 		{Type: model.MetricTypeDeployTargets, Value: float64(len(targets)) / float64(divisor)},
 	}
 }

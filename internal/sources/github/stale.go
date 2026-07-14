@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/kobbikobb/complexity-radar/internal/model"
-	"github.com/kobbikobb/complexity-radar/internal/sources"
 )
 
 // PullRequest represents a GitHub pull request.
@@ -43,7 +42,7 @@ func isBotPR(pr PullRequest) bool {
 	return false
 }
 
-func (s *Source) collectStalePRs(ctx context.Context, owner, name string) ([]sources.SourceMetric, error) {
+func (s *Source) collectStalePRs(ctx context.Context, owner, name string) ([]model.SourceMetric, error) {
 	params := map[string]string{
 		"state":     "open",
 		"per_page":  "100",
@@ -81,7 +80,7 @@ func (s *Source) collectStalePRs(ctx context.Context, owner, name string) ([]sou
 		}
 	}
 
-	return []sources.SourceMetric{
+	return []model.SourceMetric{
 		{Type: model.MetricTypeStalePRs, Value: float64(staleCount)},
 	}, nil
 }

@@ -8,8 +8,60 @@ import (
 	"unicode"
 
 	"github.com/kobbikobb/complexity-radar/internal/model"
-	"github.com/kobbikobb/complexity-radar/internal/output"
 )
+
+type Report struct {
+	ProjectName        string
+	ProjectDescription string
+	OverallScore       float64
+	Dimensions         []DimensionReport
+	Metrics            []MetricReport
+	CollectedAt        time.Time
+	Errors             []string
+}
+
+type DimensionReport struct {
+	Dimension   model.Dimension
+	Score       float64
+	Weight      float64
+	MetricCount int
+	Breakdown   string
+}
+
+type MetricReport struct {
+	Name       model.MetricTypeName
+	Dimension  model.Dimension
+	RawValue   float64
+	Normalized float64
+	Unit       string
+}
+
+type OutputFormatter interface {
+	Format(report Report) string
+}
+
+func scoreGrade(score float64) string {
+	switch {
+	case score >= 90:
+		return "A"
+	case score >= 75:
+		return "B"
+	case score >= 60:
+		return "C"
+	case score >= 40:
+		return "D"
+	default:
+		return "F"
+	}
+}
+
+func SecurityBreakdown(metrics map[model.MetricTypeName]float64) string {
+	crit := int(metrics[model.MetricTypeSecurityCritical])
+	high := int(metrics[model.MetricTypeSecurityHigh])
+	med := int(metrics[model.MetricTypeSecurityMedium])
+	low := int(metrics[model.MetricTypeSecurityLow])
+	return fmt.Sprintf("%d critical, %d high, %d medium, %d low", crit, high, med, low)
+}
 
 type TerminalFormatter struct {
 	UseColor bool
@@ -19,7 +71,7 @@ func New() *TerminalFormatter {
 	return &TerminalFormatter{UseColor: true}
 }
 
-func (f *TerminalFormatter) Format(report output.Report) string {
+func (f *TerminalFormatter) Format(report Report) string {
 	var b strings.Builder
 
 	b.WriteString("═══════════════════════════════════════════════════\n")
@@ -33,7 +85,7 @@ func (f *TerminalFormatter) Format(report output.Report) string {
 	b.WriteString("\n")
 
 	b.WriteString("───────────────────────────────────────────────────\n")
-	fmt.Fprintf(&b, "  OVERALL SCORE: %s [%s]\n", f.colorScore(report.OverallScore), output.ScoreGrade(report.OverallScore))
+	fmt.Fprintf(&b, "  OVERALL SCORE: %s [%s]\n", f.colorScore(report.OverallScore), scoreGrade(report.OverallScore))
 	b.WriteString("───────────────────────────────────────────────────\n")
 	b.WriteString("\n")
 
@@ -44,7 +96,7 @@ func (f *TerminalFormatter) Format(report output.Report) string {
 	b.WriteString(tableBorder(dimWidths, "├", "┼", "┤"))
 	for _, d := range report.Dimensions {
 		weight := fmt.Sprintf("%.1f%%", d.Weight)
-		row := tableRow(dimWidths, string(d.Dimension), f.colorScore(d.Score), weight, fmt.Sprintf("  %s  ", output.ScoreGrade(d.Score)))
+		row := tableRow(dimWidths, string(d.Dimension), f.colorScore(d.Score), weight, fmt.Sprintf("  %s  ", scoreGrade(d.Score)))
 		if d.Breakdown != "" {
 			row = strings.TrimRight(row, "\n") + "  — " + d.Breakdown + "\n"
 		}

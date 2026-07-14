@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/kobbikobb/complexity-radar/internal/model"
-	"github.com/kobbikobb/complexity-radar/internal/sources"
 )
 
 // Vulnerability represents a Dependabot alert from the GitHub API.
@@ -35,7 +34,7 @@ func severityWeight(sev string) float64 {
 	}
 }
 
-func (s *Source) collectSecurityVulnerabilities(ctx context.Context, owner, name string) ([]sources.SourceMetric, error) {
+func (s *Source) collectSecurityVulnerabilities(ctx context.Context, owner, name string) ([]model.SourceMetric, error) {
 	endpoint := fmt.Sprintf("/repos/%s/%s/dependabot/alerts", owner, name)
 	data, err := s.client.Get(ctx, endpoint)
 	if err != nil {
@@ -76,7 +75,7 @@ func (s *Source) collectSecurityVulnerabilities(ctx context.Context, owner, name
 		}
 	}
 
-	return []sources.SourceMetric{
+	return []model.SourceMetric{
 		{Type: model.MetricTypeSecurityVulnerabilities, Value: weightedSum},
 		{Type: model.MetricTypeSecurityCritical, Value: float64(critCount)},
 		{Type: model.MetricTypeSecurityHigh, Value: float64(highCount)},

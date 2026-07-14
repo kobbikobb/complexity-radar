@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/kobbikobb/complexity-radar/internal/model"
-	"github.com/kobbikobb/complexity-radar/internal/sources"
 )
 
 type mockClient struct {
@@ -54,13 +53,13 @@ func (m *mockClient) GetFileContent(_ context.Context, _, _, path, _ string) (st
 	return "", fmt.Errorf("file not found: %s", path)
 }
 
-func findMetric(metrics []sources.SourceMetric, typ model.MetricTypeName) (sources.SourceMetric, bool) {
+func findMetric(metrics []model.SourceMetric, typ model.MetricTypeName) (model.SourceMetric, bool) {
 	for _, m := range metrics {
 		if m.Type == typ {
 			return m, true
 		}
 	}
-	return sources.SourceMetric{}, false
+	return model.SourceMetric{}, false
 }
 
 // defaultResponses returns mock responses for all endpoints with empty/default data.

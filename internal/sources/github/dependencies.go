@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/kobbikobb/complexity-radar/internal/model"
-	"github.com/kobbikobb/complexity-radar/internal/sources"
 )
 
 // dependencyFiles lists files to check for dependencies, in priority order.
@@ -23,7 +22,7 @@ var dependencyFiles = []struct {
 	{"Gemfile", parseGemfile},
 }
 
-func collectDependencyCount(ctx context.Context, client APIClient, owner, name, branch string, tree *GitTree) ([]sources.SourceMetric, error) {
+func collectDependencyCount(ctx context.Context, client APIClient, owner, name, branch string, tree *GitTree) ([]model.SourceMetric, error) {
 	parseMap := map[string]func(string) (float64, error){}
 	for _, df := range dependencyFiles {
 		parseMap[df.path] = df.parse
@@ -53,12 +52,12 @@ func collectDependencyCount(ctx context.Context, client APIClient, owner, name, 
 	}
 
 	if manifestCount == 0 {
-		return []sources.SourceMetric{
+		return []model.SourceMetric{
 			{Type: model.MetricTypeDependencyCount, Value: 0},
 		}, nil
 	}
 
-	return []sources.SourceMetric{
+	return []model.SourceMetric{
 		{Type: model.MetricTypeDependencyCount, Value: total / float64(manifestCount)},
 	}, nil
 }
