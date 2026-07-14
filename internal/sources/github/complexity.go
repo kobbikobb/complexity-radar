@@ -4,27 +4,28 @@ import (
 	"github.com/kobbikobb/complexity-radar/internal/model"
 )
 
-func collectCodeComplexity(tree *GitTree, languages map[string]int64) []model.SourceMetric {
-	var totalBytes int64
-	for _, b := range languages {
-		totalBytes += b
-	}
+// largeFileBytes is ~400 lines at avgBytesPerLine, the point where a file reads as a god-file.
+const largeFileBytes = 20000
 
-	var fileCount int64
+func collectCodeComplexity(tree *GitTree) []model.SourceMetric {
+	var totalBlobs, largeBlobs int64
 	for _, entry := range tree.Tree {
-		if entry.Type == "blob" {
-			fileCount++
+		if entry.Type != "blob" {
+			continue
+		}
+		totalBlobs++
+		if entry.Size > largeFileBytes {
+			largeBlobs++
 		}
 	}
 
-	if fileCount == 0 {
+	if totalBlobs == 0 {
 		return []model.SourceMetric{
-			{Type: model.MetricTypeCodeComplexity, Value: 0},
+			{Type: model.MetricTypeCodeComplexity, Value: noDataValue},
 		}
 	}
 
-	avgSize := float64(totalBytes) / float64(fileCount)
 	return []model.SourceMetric{
-		{Type: model.MetricTypeCodeComplexity, Value: avgSize},
+		{Type: model.MetricTypeCodeComplexity, Value: float64(largeBlobs) / float64(totalBlobs)},
 	}
 }

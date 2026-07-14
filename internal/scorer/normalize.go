@@ -15,7 +15,6 @@ const (
 	refDeployTargets           = 50.0
 	refDependencyCount         = 500.0
 	refCodeLOC                 = 100000.0
-	refCodeComplexity          = 500.0
 	refDeployFrequency         = 14.0
 	refCICDComplexity          = 500.0
 	refSecurityCritical        = 5.0
@@ -43,7 +42,10 @@ func NormalizeMetric(metricType model.MetricTypeName, value float64) float64 {
 	case model.MetricTypeCodeLOC:
 		return clamp(100 - logNormalize(value, refCodeLOC)*100)
 	case model.MetricTypeCodeComplexity:
-		return clamp(100 - logNormalize(value, refCodeComplexity)*100)
+		if value < 0 {
+			return math.NaN()
+		}
+		return clamp(100 - value*100)
 	case model.MetricTypeDeployFrequency:
 		if value < 0 {
 			return math.NaN()
