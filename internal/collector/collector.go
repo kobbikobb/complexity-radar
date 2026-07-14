@@ -61,10 +61,11 @@ func Collect(ctx context.Context, cfg *config.Config, s *store.Store, src source
 
 	for repoIdx, repoCfg := range cfg.Repositories {
 		repo := &model.Repository{
-			ProjectID:     project.ID,
-			URL:           repoCfg.URL,
-			Branch:        repoCfg.Branch,
-			GitopsRepoURL: repoCfg.GitopsRepoURL,
+			ProjectID:        project.ID,
+			URL:              repoCfg.URL,
+			Branch:           repoCfg.Branch,
+			GitopsRepoURL:    repoCfg.GitopsRepoURL,
+			DeployTagPattern: repoCfg.DeployTagPattern,
 		}
 		if err := s.CreateRepository(repo); err != nil {
 			return nil, fmt.Errorf("creating repository %s: %w", repoCfg.URL, err)

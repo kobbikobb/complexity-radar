@@ -18,9 +18,10 @@ type ProjectConfig struct {
 }
 
 type RepositoryConfig struct {
-	URL           string
-	Branch        string
-	GitopsRepoURL string
+	URL              string
+	Branch           string
+	GitopsRepoURL    string
+	DeployTagPattern string
 }
 
 // WeightsConfig defines dimension weights for scoring (must sum to 1.0).

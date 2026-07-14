@@ -643,6 +643,61 @@ func TestCollectGitopsDeployFrequency(t *testing.T) {
 	}
 }
 
+func TestCollectTagDeployFrequency(t *testing.T) {
+	recentDate := time.Now().AddDate(0, 0, -2).Format(time.RFC3339)
+	oldDate := time.Now().AddDate(0, 0, -10).Format(time.RFC3339)
+
+	tags := []map[string]interface{}{
+		{"name": "deploy/prod-2024-01", "commit": map[string]string{"sha": "abc123"}},
+		{"name": "deploy/staging-2024-01", "commit": map[string]string{"sha": "def456"}},
+		{"name": "v1.0.0", "commit": map[string]string{"sha": "ghi789"}},
+	}
+	tagsData, _ := json.Marshal(tags)
+
+	recentCommit := map[string]interface{}{
+		"commit": map[string]interface{}{
+			"committer": map[string]string{"date": recentDate},
+		},
+	}
+	recentCommitData, _ := json.Marshal(recentCommit)
+
+	oldCommit := map[string]interface{}{
+		"commit": map[string]interface{}{
+			"committer": map[string]string{"date": oldDate},
+		},
+	}
+	oldCommitData, _ := json.Marshal(oldCommit)
+
+	responses := defaultResponses()
+	responses["/repos/org/repo/tags"] = tagsData
+	responses["/repos/org/repo/commits/abc123"] = recentCommitData
+	responses["/repos/org/repo/commits/def456"] = recentCommitData
+	responses["/repos/org/repo/commits/ghi789"] = oldCommitData
+	responses["/repos/org/repo/git/trees/main"] = makeTreeJSON(nil)
+
+	client := &mockClient{responses: responses}
+	src := NewSourceWithClient(client)
+	repo := model.Repository{
+		URL:              "github.com/org/repo",
+		Branch:           "main",
+		DeployTagPattern: "deploy/",
+	}
+
+	metrics, err := src.Collect(context.Background(), repo)
+	if err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	m, ok := findMetric(metrics, model.MetricTypeDeployFrequency)
+	if !ok {
+		t.Fatal("missing deploy_frequency metric")
+	}
+	// 2 tags match "deploy/" prefix, both recent, 1 tag doesn't match
+	if m.Value != 2 {
+		t.Errorf("deploy frequency = %v, want 2", m.Value)
+	}
+}
+
 func TestParsePackageJSON(t *testing.T) {
 	content := `{"dependencies": {"a": "1", "b": "2"}, "devDependencies": {"c": "3"}}`
 	count, err := parsePackageJSON(content)

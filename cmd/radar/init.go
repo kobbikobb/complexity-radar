@@ -127,10 +127,16 @@ func promptRepositories(reader *bufio.Reader, s *store.Store, projectID int64) (
 			return nil, err
 		}
 
+		tagPattern, err := prompt(reader, "Deploy tag prefix (optional, e.g. deploy/ or v)", "")
+		if err != nil {
+			return nil, err
+		}
+
 		repo := &model.Repository{
-			ProjectID: projectID,
-			URL:       url,
-			Branch:    branch,
+			ProjectID:        projectID,
+			URL:              url,
+			Branch:           branch,
+			DeployTagPattern: tagPattern,
 		}
 		if err := s.CreateRepository(repo); err != nil {
 			return nil, fmt.Errorf("creating repository: %w", err)
