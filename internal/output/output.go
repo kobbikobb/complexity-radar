@@ -1,6 +1,7 @@
 package output
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/kobbikobb/complexity-radar/internal/model"
@@ -21,6 +22,7 @@ type DimensionReport struct {
 	Score       float64
 	Weight      float64
 	MetricCount int
+	Breakdown   string
 }
 
 type MetricReport struct {
@@ -48,4 +50,12 @@ func ScoreGrade(score float64) string {
 	default:
 		return "F"
 	}
+}
+
+func SecurityBreakdown(metrics map[model.MetricTypeName]float64) string {
+	crit := int(metrics[model.MetricTypeSecurityCritical])
+	high := int(metrics[model.MetricTypeSecurityHigh])
+	med := int(metrics[model.MetricTypeSecurityMedium])
+	low := int(metrics[model.MetricTypeSecurityLow])
+	return fmt.Sprintf("%d critical, %d high, %d medium, %d low", crit, high, med, low)
 }

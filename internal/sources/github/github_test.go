@@ -70,6 +70,7 @@ func defaultResponses() map[string]json.RawMessage {
 		"/repos/org/repo/actions/runs":      []byte(`{"workflow_runs": []}`),
 		"/repos/org/repo/releases":          []byte(`[]`),
 		"/repos/org/repo/pulls":             []byte(`[]`),
+		"/repos/org/repo/languages":         []byte(`{}`),
 	}
 }
 
@@ -77,10 +78,12 @@ func defaultResponses() map[string]json.RawMessage {
 func makeTreeJSON(paths []string) json.RawMessage {
 	type entry struct {
 		Path string `json:"path"`
+		Size int64  `json:"size"`
+		Type string `json:"type"`
 	}
 	var tree []entry
 	for _, p := range paths {
-		tree = append(tree, entry{Path: p})
+		tree = append(tree, entry{Path: p, Size: 100, Type: "blob"})
 	}
 	data, _ := json.Marshal(struct {
 		Tree []entry `json:"tree"`
@@ -307,6 +310,8 @@ func TestSupportedMetrics(t *testing.T) {
 		model.MetricTypeDeployFrequency,
 		model.MetricTypeStalePRs,
 		model.MetricTypeDependencyCount,
+		model.MetricTypeCodeLOC,
+		model.MetricTypeCodeComplexity,
 		model.MetricTypeK8sDeployments,
 		model.MetricTypeContainerImages,
 		model.MetricTypeDeployTargets,
@@ -334,7 +339,7 @@ func TestCollectDependencyCount(t *testing.T) {
 		responses:    defaultResponses(),
 		fileContents: map[string]string{"package.json": packageJSON},
 	}
-	client.responses["/repos/org/repo/git/trees/main"] = makeTreeJSON(nil)
+	client.responses["/repos/org/repo/git/trees/main"] = makeTreeJSON([]string{"package.json"})
 
 	src := NewSourceWithClient(client)
 	repo := model.Repository{URL: "github.com/org/repo", Branch: "main"}
@@ -367,7 +372,7 @@ require (
 		responses:    defaultResponses(),
 		fileContents: map[string]string{"go.mod": goMod},
 	}
-	client.responses["/repos/org/repo/git/trees/main"] = makeTreeJSON(nil)
+	client.responses["/repos/org/repo/git/trees/main"] = makeTreeJSON([]string{"go.mod"})
 
 	src := NewSourceWithClient(client)
 	repo := model.Repository{URL: "github.com/org/repo", Branch: "main"}

@@ -1,6 +1,10 @@
 package scorer
 
-import "github.com/kobbikobb/complexity-radar/internal/model"
+import (
+	"math"
+
+	"github.com/kobbikobb/complexity-radar/internal/model"
+)
 
 type DimensionResult struct {
 	Dimension   model.Dimension
@@ -32,6 +36,9 @@ func ScoreDimensions(metrics map[model.MetricTypeName]float64) []DimensionResult
 			continue
 		}
 		normalized := NormalizeMetric(name, value)
+		if math.IsNaN(normalized) {
+			continue
+		}
 		grouped[dim] = append(grouped[dim], normalized)
 	}
 

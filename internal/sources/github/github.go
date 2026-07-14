@@ -19,6 +19,8 @@ type GitTree struct {
 // GitTreeEntry represents a single entry in a git tree.
 type GitTreeEntry struct {
 	Path string `json:"path"`
+	Size int64  `json:"size"`
+	Type string `json:"type"`
 }
 
 // Source collects metrics from GitHub via the gh CLI.
@@ -48,6 +50,8 @@ func (s *Source) SupportedMetrics() []model.MetricTypeName {
 		model.MetricTypeDeployFrequency,
 		model.MetricTypeStalePRs,
 		model.MetricTypeDependencyCount,
+		model.MetricTypeCodeLOC,
+		model.MetricTypeCodeComplexity,
 		model.MetricTypeK8sDeployments,
 		model.MetricTypeContainerImages,
 		model.MetricTypeDeployTargets,
@@ -81,7 +85,7 @@ func (s *Source) Collect(ctx context.Context, repo model.Repository) ([]sources.
 	}
 	metrics = append(metrics, buildSuccessRatio(runs), buildTime(runs))
 
-	m, err = s.collectDeployFrequency(ctx, owner, name)
+	m, err = s.collectDeployFrequency(ctx, owner, name, repo.GitopsRepoURL)
 	if err != nil {
 		return nil, fmt.Errorf("collecting deploy frequency: %w", err)
 	}
@@ -101,11 +105,19 @@ func (s *Source) Collect(ctx context.Context, repo model.Repository) ([]sources.
 		tree = &GitTree{}
 	}
 
-	m, err = s.collectDependencyCount(ctx, owner, name, branch)
+	languages, err := s.fetchLanguages(ctx, owner, name)
+	if err != nil {
+		return nil, fmt.Errorf("fetching languages: %w", err)
+	}
+
+	m, err = collectDependencyCount(ctx, s.client, owner, name, branch, tree)
 	if err != nil {
 		return nil, fmt.Errorf("collecting dependency count: %w", err)
 	}
 	metrics = append(metrics, m...)
+
+	metrics = append(metrics, collectCodeLOC(languages)...)
+	metrics = append(metrics, collectCodeComplexity(tree, languages)...)
 
 	metrics = append(metrics, collectK8sDeployments(tree)...)
 	metrics = append(metrics, collectContainerImages(ctx, s.client, owner, name, branch, tree)...)
@@ -128,6 +140,19 @@ func (s *Source) fetchGitTree(ctx context.Context, owner, name, branch string) (
 	}
 
 	return &tree, nil
+}
+
+func (s *Source) fetchLanguages(ctx context.Context, owner, name string) (map[string]int64, error) {
+	endpoint := fmt.Sprintf("/repos/%s/%s/languages", owner, name)
+	data, err := s.client.Get(ctx, endpoint)
+	if err != nil {
+		return nil, err
+	}
+	var languages map[string]int64
+	if err := json.Unmarshal(data, &languages); err != nil {
+		return nil, fmt.Errorf("parsing languages: %w", err)
+	}
+	return languages, nil
 }
 
 // parseRepoURL extracts owner and repo name from a GitHub URL.

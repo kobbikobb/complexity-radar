@@ -17,11 +17,6 @@ func collectCICDComplexity(ctx context.Context, client APIClient, owner, name, b
 	// Score other CI systems
 	score += scoreOtherCISystems(ctx, client, owner, name, branch)
 
-	// Cap at 100
-	if score > 100 {
-		score = 100
-	}
-
 	return []sources.SourceMetric{
 		{Type: model.MetricTypeCICDComplexity, Value: score},
 	}

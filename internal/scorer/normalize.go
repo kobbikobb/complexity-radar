@@ -14,8 +14,14 @@ const (
 	refContainerImages         = 200.0
 	refDeployTargets           = 50.0
 	refDependencyCount         = 500.0
+	refCodeLOC                 = 100000.0
+	refCodeComplexity          = 500.0
 	refDeployFrequency         = 14.0
 	refCICDComplexity          = 500.0
+	refSecurityCritical        = 5.0
+	refSecurityHigh            = 10.0
+	refSecurityMedium          = 20.0
+	refSecurityLow             = 30.0
 )
 
 func NormalizeMetric(metricType model.MetricTypeName, value float64) float64 {
@@ -34,12 +40,27 @@ func NormalizeMetric(metricType model.MetricTypeName, value float64) float64 {
 		return clamp(100 - logNormalize(value, refDeployTargets)*100)
 	case model.MetricTypeDependencyCount:
 		return clamp(100 - logNormalize(value, refDependencyCount)*100)
+	case model.MetricTypeCodeLOC:
+		return clamp(100 - logNormalize(value, refCodeLOC)*100)
+	case model.MetricTypeCodeComplexity:
+		return clamp(100 - logNormalize(value, refCodeComplexity)*100)
 	case model.MetricTypeDeployFrequency:
+		if value < 0 {
+			return math.NaN()
+		}
 		return clamp((value / refDeployFrequency) * 100)
 	case model.MetricTypeBuildSuccessRatio:
 		return clamp(value * 100)
 	case model.MetricTypeCICDComplexity:
 		return clamp(logNormalize(value, refCICDComplexity) * 100)
+	case model.MetricTypeSecurityCritical:
+		return clamp(100 - logNormalize(value, refSecurityCritical)*100)
+	case model.MetricTypeSecurityHigh:
+		return clamp(100 - logNormalize(value, refSecurityHigh)*100)
+	case model.MetricTypeSecurityMedium:
+		return clamp(100 - logNormalize(value, refSecurityMedium)*100)
+	case model.MetricTypeSecurityLow:
+		return clamp(100 - logNormalize(value, refSecurityLow)*100)
 	default:
 		return 0
 	}
