@@ -83,6 +83,60 @@ func TestBuildFromResultProducesReports(t *testing.T) {
 	}
 }
 
+func TestBuildFromResultUsesCollectionTimeNotRepoCreation(t *testing.T) {
+	collected := time.Date(2026, 7, 14, 15, 3, 0, 0, time.UTC)
+	result := collector.CollectionResult{
+		Project: model.Project{Name: "TimeTest"},
+		Repositories: []collector.RepositoryResult{
+			{
+				Repository:  model.Repository{CreatedAt: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)},
+				Metrics:     map[model.MetricTypeName]float64{},
+				Dimensions:  []scorer.DimensionResult{},
+				CollectedAt: collected,
+			},
+		},
+	}
+
+	reports := BuildFromResult(result, testConfig())
+
+	if !reports[0].CollectedAt.Equal(collected) {
+		t.Errorf("CollectedAt = %v, want collection time %v (not repo creation date)", reports[0].CollectedAt, collected)
+	}
+}
+
+func TestBuildFromDBUsesMetricCollectionTime(t *testing.T) {
+	s := newTestStore(t)
+
+	p := &model.Project{Name: "DBTime"}
+	if err := s.CreateProject(p); err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	r := &model.Repository{ProjectID: p.ID, URL: "github.com/org/repo", Branch: "main"}
+	if err := s.CreateRepository(r); err != nil {
+		t.Fatalf("CreateRepository: %v", err)
+	}
+	mt, err := s.GetMetricTypeByName(model.MetricTypeSecurityVulnerabilities)
+	if err != nil {
+		t.Fatalf("GetMetricTypeByName: %v", err)
+	}
+	m := &model.Metric{RepositoryID: r.ID, MetricTypeID: mt.ID, Value: 3}
+	if err := s.CreateMetric(m); err != nil {
+		t.Fatalf("CreateMetric: %v", err)
+	}
+
+	reports, err := BuildFromDB(s, *p, testConfig(), nil)
+	if err != nil {
+		t.Fatalf("BuildFromDB: %v", err)
+	}
+
+	if reports[0].CollectedAt.IsZero() {
+		t.Error("CollectedAt is zero; want the metric collection time")
+	}
+	if !reports[0].CollectedAt.Equal(m.CollectedAt) {
+		t.Errorf("CollectedAt = %v, want metric collected_at %v", reports[0].CollectedAt, m.CollectedAt)
+	}
+}
+
 func TestBuildFromResultDimensionWeights(t *testing.T) {
 	result := collector.CollectionResult{
 		Project: model.Project{Name: "Test"},
