@@ -4,8 +4,7 @@ import (
 	"fmt"
 
 	"github.com/kobbikobb/complexity-radar/internal/collector"
-	"github.com/kobbikobb/complexity-radar/internal/model"
-	"github.com/kobbikobb/complexity-radar/internal/scorer"
+	"github.com/kobbikobb/complexity-radar/internal/report"
 	"github.com/kobbikobb/complexity-radar/internal/sources/github"
 	"github.com/kobbikobb/complexity-radar/internal/terminal"
 	"github.com/spf13/cobra"
@@ -62,54 +61,9 @@ func runScan(cmd *cobra.Command, args []string) error {
 	formatter := terminal.New()
 	formatter.UseColor = true
 
-	for _, repoResult := range result.Repositories {
-		if len(repoResult.Errors) > 0 {
-			for _, e := range repoResult.Errors {
-				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "  Warning: %s\n", e)
-			}
-		}
-
-		dimReports := make([]terminal.DimensionReport, len(repoResult.Dimensions))
-		for i, d := range repoResult.Dimensions {
-			dr := terminal.DimensionReport{
-				Dimension:   d.Dimension,
-				Score:       d.Score,
-				Weight:      cfg.Weights.Weight(string(d.Dimension)) * 100,
-				MetricCount: d.MetricCount,
-			}
-			if d.Dimension == model.DimensionSecurity {
-				dr.Breakdown = terminal.SecurityBreakdown(repoResult.Metrics)
-			}
-			dimReports[i] = dr
-		}
-
-		metricReports := make([]terminal.MetricReport, 0, len(repoResult.Metrics))
-		for name, raw := range repoResult.Metrics {
-			mt, err := s.GetMetricTypeByName(name)
-			if err != nil {
-				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "  Warning: unknown metric %s, skipping\n", name)
-				continue
-			}
-			normalized := scorer.NormalizeMetric(name, raw)
-			metricReports = append(metricReports, terminal.MetricReport{
-				Name:       name,
-				Dimension:  mt.Dimension,
-				RawValue:   raw,
-				Normalized: normalized,
-				Unit:       mt.Unit,
-			})
-		}
-
-		report := terminal.Report{
-			ProjectName:        result.Project.Name,
-			ProjectDescription: result.Project.Description,
-			OverallScore:       repoResult.OverallScore,
-			Dimensions:         dimReports,
-			Metrics:            metricReports,
-			CollectedAt:        repoResult.Repository.CreatedAt,
-		}
-
-		fmt.Println(formatter.Format(report))
+	reports := report.BuildFromResult(*result, cfg)
+	for _, r := range reports {
+		fmt.Println(formatter.Format(r))
 	}
 
 	return nil
