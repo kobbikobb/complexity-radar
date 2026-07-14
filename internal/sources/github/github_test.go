@@ -305,6 +305,10 @@ func TestSupportedMetrics(t *testing.T) {
 
 	expected := []model.MetricTypeName{
 		model.MetricTypeSecurityVulnerabilities,
+		model.MetricTypeSecurityCritical,
+		model.MetricTypeSecurityHigh,
+		model.MetricTypeSecurityMedium,
+		model.MetricTypeSecurityLow,
 		model.MetricTypeBuildSuccessRatio,
 		model.MetricTypeBuildTime,
 		model.MetricTypeDeployFrequency,

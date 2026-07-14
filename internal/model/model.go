@@ -51,12 +51,18 @@ func MetricTypes() []MetricType {
 		{Name: MetricTypeDeployTargets, Dimension: DimensionInfrastructure, Unit: "count"},
 		{Name: MetricTypeCICDComplexity, Dimension: DimensionInfrastructure, Unit: "score"},
 		{Name: MetricTypeDependencyCount, Dimension: DimensionCode, Unit: "count"},
+		{Name: MetricTypeCodeLOC, Dimension: DimensionCode, Unit: "lines"},
+		{Name: MetricTypeCodeComplexity, Dimension: DimensionCode, Unit: "bytes/file"},
+	}
+}
+
+// DisplayMetricTypes returns metric types used for display only (not scored).
+func DisplayMetricTypes() []MetricType {
+	return []MetricType{
 		{Name: MetricTypeSecurityCritical, Dimension: DimensionSecurity, Unit: "count"},
 		{Name: MetricTypeSecurityHigh, Dimension: DimensionSecurity, Unit: "count"},
 		{Name: MetricTypeSecurityMedium, Dimension: DimensionSecurity, Unit: "count"},
 		{Name: MetricTypeSecurityLow, Dimension: DimensionSecurity, Unit: "count"},
-		{Name: MetricTypeCodeLOC, Dimension: DimensionCode, Unit: "lines"},
-		{Name: MetricTypeCodeComplexity, Dimension: DimensionCode, Unit: "bytes"},
 	}
 }
 

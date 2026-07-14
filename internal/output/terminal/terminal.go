@@ -147,6 +147,9 @@ func formatUnit(unit string) string {
 }
 
 func formatRawValue(value float64, unit string) string {
+	if value == -1.0 {
+		return "—"
+	}
 	switch unit {
 	case "ratio":
 		return fmt.Sprintf("%.2f", value*100)

@@ -45,6 +45,10 @@ func (s *Source) Name() string {
 func (s *Source) SupportedMetrics() []model.MetricTypeName {
 	return []model.MetricTypeName{
 		model.MetricTypeSecurityVulnerabilities,
+		model.MetricTypeSecurityCritical,
+		model.MetricTypeSecurityHigh,
+		model.MetricTypeSecurityMedium,
+		model.MetricTypeSecurityLow,
 		model.MetricTypeBuildSuccessRatio,
 		model.MetricTypeBuildTime,
 		model.MetricTypeDeployFrequency,

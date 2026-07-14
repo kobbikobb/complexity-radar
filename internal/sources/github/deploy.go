@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/kobbikobb/complexity-radar/internal/model"
@@ -26,6 +27,7 @@ func (s *Source) collectDeployFrequency(ctx context.Context, owner, name, gitops
 		if err == nil {
 			return metrics, nil
 		}
+		log.Printf("warning: gitops deploy frequency failed (%v), falling back to releases", err)
 	}
 
 	metrics, err := s.collectReleaseDeployFrequency(ctx, owner, name)
