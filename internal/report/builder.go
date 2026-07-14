@@ -74,11 +74,15 @@ func BuildFromDB(store Store, project model.Project, cfg *config.Config, warn io
 		}
 
 		rawMetrics := make(map[model.MetricTypeName]float64)
+		prevMetrics := make(map[model.MetricTypeName]float64)
 		var collectedAt time.Time
 		for _, m := range metrics {
 			mt, err := store.GetMetricTypeByID(m.MetricTypeID)
 			if err != nil {
 				continue
+			}
+			if v, ok := rawMetrics[mt.Name]; ok {
+				prevMetrics[mt.Name] = v
 			}
 			rawMetrics[mt.Name] = m.Value
 			if m.CollectedAt.After(collectedAt) {
@@ -89,6 +93,20 @@ func BuildFromDB(store Store, project model.Project, cfg *config.Config, warn io
 		scoreResult := scorer.Score(rawMetrics, weights)
 
 		dimReports := buildDimensionReports(scoreResult.Dimensions, cfg.Weights)
+
+		hasTrend, overallDelta := false, 0.0
+		if len(prevMetrics) > 0 {
+			prev := scorer.Score(prevMetrics, weights)
+			prevByDim := make(map[model.Dimension]float64, len(prev.Dimensions))
+			for _, d := range prev.Dimensions {
+				prevByDim[d.Dimension] = d.Score
+			}
+			for i := range dimReports {
+				dimReports[i].Delta = dimReports[i].Score - prevByDim[dimReports[i].Dimension]
+			}
+			hasTrend = true
+			overallDelta = scoreResult.Overall - prev.Overall
+		}
 
 		metricReports := make([]terminal.MetricReport, 0, len(rawMetrics))
 		for name, raw := range rawMetrics {
@@ -113,6 +131,8 @@ func BuildFromDB(store Store, project model.Project, cfg *config.Config, warn io
 			Dimensions:         dimReports,
 			Metrics:            metricReports,
 			CollectedAt:        collectedAt,
+			HasTrend:           hasTrend,
+			OverallDelta:       overallDelta,
 		})
 	}
 

@@ -104,6 +104,34 @@ func TestOverallGradeIgnoresCriticalWithoutData(t *testing.T) {
 	}
 }
 
+func TestFormatShowsTrendWhenEnabled(t *testing.T) {
+	f := New()
+	f.UseColor = false
+	f.ShowTrend = true
+	report := sampleReport()
+	report.HasTrend = true
+	report.OverallDelta = 4.2
+	out := f.Format(report)
+
+	if !strings.Contains(out, "▲ +4.2 vs previous") {
+		t.Errorf("expected overall trend delta in output, got:\n%s", out)
+	}
+}
+
+func TestFormatHidesTrendWhenDisabled(t *testing.T) {
+	f := New()
+	f.UseColor = false
+	f.ShowTrend = false
+	report := sampleReport()
+	report.HasTrend = true
+	report.OverallDelta = 4.2
+	out := f.Format(report)
+
+	if strings.Contains(out, "vs previous") {
+		t.Errorf("trend shown without --history, got:\n%s", out)
+	}
+}
+
 func TestFormatShouldIncludeScoreLegend(t *testing.T) {
 	f := New()
 	f.UseColor = false
