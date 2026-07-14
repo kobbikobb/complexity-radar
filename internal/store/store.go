@@ -277,9 +277,9 @@ func (s *Store) FindOrCreateRepository(projectID int64, url, branch string) (*mo
 	r := &model.Repository{}
 	var createdAt, updatedAt string
 	err := s.db.QueryRow(
-		"SELECT id, project_id, url, branch, created_at, updated_at FROM repositories WHERE project_id = ? AND url = ?",
+		"SELECT id, project_id, url, branch, gitops_repo_url, deploy_detection, include_prereleases, tag_prefix, created_at, updated_at FROM repositories WHERE project_id = ? AND url = ?",
 		projectID, url,
-	).Scan(&r.ID, &r.ProjectID, &r.URL, &r.Branch, &createdAt, &updatedAt)
+	).Scan(&r.ID, &r.ProjectID, &r.URL, &r.Branch, &r.GitopsRepoURL, &r.DeployDetection, &r.IncludePrereleases, &r.TagPrefix, &createdAt, &updatedAt)
 	if err == nil {
 		r.CreatedAt, err = time.Parse(time.RFC3339, createdAt)
 		if err != nil {

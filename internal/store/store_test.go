@@ -558,6 +558,28 @@ func TestFindOrCreateRepositoryCreatesNew(t *testing.T) {
 	}
 }
 
+func TestFindOrCreateRepositoryLoadsDeployFields(t *testing.T) {
+	s := newTestStore(t)
+
+	p := &model.Project{Name: "Parent"}
+	if err := s.CreateProject(p); err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	created := &model.Repository{ProjectID: p.ID, URL: "github.com/org/repo", Branch: "main", GitopsRepoURL: "github.com/org/gitops", DeployDetection: config.DeployDetectionTags, IncludePrereleases: true, TagPrefix: "promote/"}
+	if err := s.CreateRepository(created); err != nil {
+		t.Fatalf("CreateRepository: %v", err)
+	}
+
+	r, err := s.FindOrCreateRepository(p.ID, "github.com/org/repo", "main")
+	if err != nil {
+		t.Fatalf("FindOrCreateRepository: %v", err)
+	}
+
+	if r.GitopsRepoURL != "github.com/org/gitops" || r.DeployDetection != config.DeployDetectionTags || !r.IncludePrereleases || r.TagPrefix != "promote/" {
+		t.Errorf("deploy fields not loaded: %+v", r)
+	}
+}
+
 func TestFindOrCreateRepositoryIdempotent(t *testing.T) {
 	s := newTestStore(t)
 
