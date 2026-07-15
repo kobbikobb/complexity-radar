@@ -24,32 +24,32 @@ func TestNormalizeMetricLowerIsBetter(t *testing.T) {
 		minScore float64
 		maxScore float64
 	}{
-		// Log scale: 0 → 100, ref → ~0, half-ref → ~50
+		// Asymptotic: 0 → 100, ref → 50, never floors to 0
 		{"zero security_vulns", model.MetricTypeSecurityVulnerabilities, 0, 100, 100},
-		{"low security_vulns", model.MetricTypeSecurityVulnerabilities, 5, 50, 90},
-		{"high security_vulns", model.MetricTypeSecurityVulnerabilities, 30, 0, 30},
+		{"low security_vulns", model.MetricTypeSecurityVulnerabilities, 5, 90, 95},
+		{"at ref security_vulns", model.MetricTypeSecurityVulnerabilities, 70, 48, 52},
 
 		{"zero stale_prs", model.MetricTypeStalePRs, 0, 100, 100},
-		{"low stale_prs", model.MetricTypeStalePRs, 5, 40, 80},
-		{"high stale_prs", model.MetricTypeStalePRs, 20, 0, 30},
+		{"low stale_prs", model.MetricTypeStalePRs, 5, 85, 92},
+		{"at ref stale_prs", model.MetricTypeStalePRs, 45, 48, 52},
 
 		{"zero build_time", model.MetricTypeBuildTime, 0, 100, 100},
 		{"half refMax build_time", model.MetricTypeBuildTime, 900, 45, 55},
 		{"at refMax build_time", model.MetricTypeBuildTime, 1800, 0, 5},
 
 		{"zero k8s_deployments", model.MetricTypeK8sDeployments, 0, 100, 100},
-		{"low k8s_deployments", model.MetricTypeK8sDeployments, 10, 50, 80},
-		{"high k8s_deployments", model.MetricTypeK8sDeployments, 100, 0, 40},
+		{"low k8s_deployments", model.MetricTypeK8sDeployments, 10, 88, 93},
+		{"at ref k8s_deployments", model.MetricTypeK8sDeployments, 100, 48, 52},
 
 		{"zero container_images", model.MetricTypeContainerImages, 0, 100, 100},
-		{"low container_images", model.MetricTypeContainerImages, 10, 50, 80},
+		{"low container_images", model.MetricTypeContainerImages, 10, 75, 82},
 
 		{"zero deploy_targets", model.MetricTypeDeployTargets, 0, 100, 100},
-		{"low deploy_targets", model.MetricTypeDeployTargets, 5, 50, 90},
+		{"low deploy_targets", model.MetricTypeDeployTargets, 5, 75, 82},
 
 		{"zero dependency_count", model.MetricTypeDependencyCount, 0, 100, 100},
-		{"low dependency_count", model.MetricTypeDependencyCount, 5, 30, 70},
-		{"high dependency_count", model.MetricTypeDependencyCount, 20, 0, 30},
+		{"low dependency_count", model.MetricTypeDependencyCount, 5, 58, 65},
+		{"at ref dependency_count", model.MetricTypeDependencyCount, 8, 48, 52},
 	}
 
 	for _, tt := range tests {
@@ -307,12 +307,12 @@ func TestScoreUnequalWeights(t *testing.T) {
 }
 
 func TestScoreUnequalDimensionScores(t *testing.T) {
-	// security=100, delivery=0, infra=0, code=0
+	// security=100, delivery=0, infra≈67, code≈4
 	metrics := map[model.MetricTypeName]float64{
 		model.MetricTypeSecurityVulnerabilities: 0,   // 100
 		model.MetricTypeBuildSuccessRatio:       0,   // delivery: 0
-		model.MetricTypeK8sDeployments:          50,  // infra: ~26 (log scale)
-		model.MetricTypeDependencyCount:         200, // code: 0 (well above ref, log scale)
+		model.MetricTypeK8sDeployments:          50,  // infra: ~67 (asymptotic, ref 100)
+		model.MetricTypeDependencyCount:         200, // code: ~4 (well above ref 8)
 	}
 	weights := map[model.Dimension]float64{
 		model.DimensionSecurity:       0.25,
@@ -321,10 +321,9 @@ func TestScoreUnequalDimensionScores(t *testing.T) {
 		model.DimensionCode:           0.25,
 	}
 	result := Score(metrics, weights)
-	// security=100*0.25, delivery=0, infra=~26*0.25, code=~15*0.25
-	// overall should be > 25 but < 50
-	if result.Overall < 20 || result.Overall > 50 {
-		t.Errorf("overall = %v, want between 20 and 50", result.Overall)
+	// (100 + 0 + ~67 + ~4) * 0.25 ≈ 43
+	if result.Overall < 30 || result.Overall > 55 {
+		t.Errorf("overall = %v, want between 30 and 55", result.Overall)
 	}
 }
 
@@ -352,11 +351,9 @@ func TestScoreWithDefaults(t *testing.T) {
 		model.MetricTypeDependencyCount:         2,
 	}
 	result := ScoreWithDefaults(metrics)
-	// With log scale, scores will differ from linear
-	// security=100, delivery=50, infra=~63, code=~64 (deps/service)
-	// overall should be reasonable
-	if result.Overall < 50 || result.Overall > 80 {
-		t.Errorf("overall = %v, want between 50 and 80", result.Overall)
+	// security=100, delivery=50, infra=~80 (k8s 25, ref 100), code=~80 (deps 2, ref 8)
+	if result.Overall < 50 || result.Overall > 85 {
+		t.Errorf("overall = %v, want between 50 and 85", result.Overall)
 	}
 }
 
@@ -419,9 +416,9 @@ func TestScoreWithConfigUnequalScores(t *testing.T) {
 		Code:           0.25,
 	}
 	result := ScoreWithConfig(metrics, cfg)
-	// delivery contributes: 100 * 0.25 = 25, others contribute some via log scale
-	if result.Overall < 20 || result.Overall > 40 {
-		t.Errorf("overall = %v, want between 20 and 40", result.Overall)
+	// delivery 100*0.25; security ~58, infra ~33, code ~2 (asymptotic, never floors)
+	if result.Overall < 40 || result.Overall > 55 {
+		t.Errorf("overall = %v, want between 40 and 55", result.Overall)
 	}
 }
 
@@ -477,7 +474,8 @@ func TestScoreBoundaryValues(t *testing.T) {
 		model.MetricTypeCICDComplexity:          500,  // high
 	}
 	result = ScoreWithDefaults(worstMetrics)
-	if result.Overall > 20 {
-		t.Errorf("worst case overall = %v, want <= 20", result.Overall)
+	// asymptotic curve never floors, so worst case lands low but not near 0
+	if result.Overall > 40 {
+		t.Errorf("worst case overall = %v, want <= 40", result.Overall)
 	}
 }

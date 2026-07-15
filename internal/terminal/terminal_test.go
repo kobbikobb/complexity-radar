@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/kobbikobb/complexity-radar/internal/model"
+	"github.com/kobbikobb/complexity-radar/internal/scorer"
 )
 
 // --- helpers ---
@@ -104,6 +105,57 @@ func TestOverallGradeIgnoresCriticalWithoutData(t *testing.T) {
 	}
 }
 
+// TestScoringSanityGatePlatformFixture pins the real platform raw values that
+// previously floored to F and asserts the asymptotic curve keeps them at ≈ C/D.
+func TestScoringSanityGatePlatformFixture(t *testing.T) {
+	// Arrange
+	metrics := map[model.MetricTypeName]float64{
+		model.MetricTypeSecurityVulnerabilities: 95.9,
+		model.MetricTypeStalePRs:                46,
+		model.MetricTypeBuildTime:               365.8,
+		model.MetricTypeDeployFrequency:         5,
+		model.MetricTypeBuildSuccessRatio:       1.0,
+		model.MetricTypeDecisionDensity:         18.4,
+		model.MetricTypeDependencyCount:         5.8,
+		model.MetricTypeK8sDeployments:          79,
+		model.MetricTypeContainerImages:         5,
+		model.MetricTypeDeployTargets:           11,
+		model.MetricTypeCICDComplexity:          100,
+	}
+
+	// Act
+	result := scorer.ScoreWithDefaults(metrics)
+	dims := make([]DimensionReport, len(result.Dimensions))
+	byDim := map[model.Dimension]float64{}
+	for i, d := range result.Dimensions {
+		dims[i] = DimensionReport{Dimension: d.Dimension, Score: d.Score, MetricCount: d.MetricCount}
+		byDim[d.Dimension] = d.Score
+	}
+	grade := overallGrade(result.Overall, dims)
+
+	// Assert
+	if result.Overall < 58 || result.Overall > 70 {
+		t.Errorf("overall = %.1f, want [58,70]", result.Overall)
+	}
+	if grade != "C" {
+		t.Errorf("overall grade = %q, want C", grade)
+	}
+	bands := []struct {
+		dim    model.Dimension
+		lo, hi float64
+	}{
+		{model.DimensionSecurity, 38, 48},
+		{model.DimensionDelivery, 78, 86},
+		{model.DimensionInfrastructure, 73, 82},
+		{model.DimensionCode, 48, 58},
+	}
+	for _, b := range bands {
+		if s := byDim[b.dim]; s < b.lo || s > b.hi {
+			t.Errorf("%s dimension = %.1f, want [%v,%v]", b.dim, s, b.lo, b.hi)
+		}
+	}
+}
+
 func TestFormatShowsTrendWhenEnabled(t *testing.T) {
 	f := New()
 	f.UseColor = false
@@ -156,10 +208,21 @@ func TestFormatShouldHideMethodologyWhenExplainDisabled(t *testing.T) {
 	out := f.Format(sampleReport())
 
 	if strings.Contains(out, "Methodology:") {
-		t.Errorf("methodology shown without --explain, got:\n%s", out)
+		t.Errorf("methodology section shown without --explain, got:\n%s", out)
 	}
-	if strings.Contains(out, methodology[model.MetricTypeBuildTime].ScoreDef) {
-		t.Errorf("scoring definition shown without --explain, got:\n%s", out)
+	if strings.Contains(out, methodology[model.MetricTypeBuildTime].RawDef) {
+		t.Errorf("raw definition shown without --explain, got:\n%s", out)
+	}
+}
+
+func TestFormatShouldShowScoreDefInlineByDefault(t *testing.T) {
+	f := New()
+	f.UseColor = false
+
+	out := f.Format(sampleReport())
+
+	if !strings.Contains(out, methodology[model.MetricTypeBuildTime].ScoreDef) {
+		t.Errorf("expected scoring definition inline in default report, got:\n%s", out)
 	}
 }
 
