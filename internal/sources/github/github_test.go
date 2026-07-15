@@ -833,12 +833,9 @@ func TestCollectDeployFrequencyTags(t *testing.T) {
 
 func TestParsePackageJSON(t *testing.T) {
 	content := `{"dependencies": {"a": "1", "b": "2"}, "devDependencies": {"c": "3"}}`
-	count, err := parsePackageJSON(content)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if count != 3 {
-		t.Errorf("count = %v, want 3", count)
+	names := parsePackageJSON(content)
+	if len(names) != 3 {
+		t.Errorf("count = %v, want 3", len(names))
 	}
 }
 
@@ -847,12 +844,9 @@ func TestParseGoMod(t *testing.T) {
 	github.com/foo v1.0.0
 	github.com/bar v2.0.0
 )`
-	count, err := parseGoMod(content)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if count != 2 {
-		t.Errorf("count = %v, want 2", count)
+	names := parseGoMod(content)
+	if len(names) != 2 {
+		t.Errorf("count = %v, want 2", len(names))
 	}
 }
 
@@ -863,12 +857,9 @@ func TestParsePomXML(t *testing.T) {
 <dependency><groupId>b</groupId></dependency>
 </dependencies>
 </project>`
-	count, err := parsePomXML(content)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if count != 2 {
-		t.Errorf("count = %v, want 2", count)
+	names := parsePomXML(content)
+	if len(names) != 2 {
+		t.Errorf("count = %v, want 2", len(names))
 	}
 }
 
@@ -877,12 +868,9 @@ func TestParseRequirementsTxt(t *testing.T) {
 requests>=2.25
 # comment
 -r base.txt`
-	count, err := parseRequirementsTxt(content)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if count != 3 {
-		t.Errorf("count = %v, want 3", count)
+	names := parseRequirementsTxt(content)
+	if len(names) != 2 {
+		t.Errorf("count = %v, want 2 (flask, requests)", len(names))
 	}
 }
 
@@ -896,12 +884,9 @@ assert_cmd = "2.0"
 
 [build-dependencies]
 cc = "1.0"`
-	count, err := parseCargoToml(content)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if count != 3 {
-		t.Errorf("count = %v, want 3 (serde, tokio, assert_cmd)", count)
+	names := parseCargoToml(content)
+	if len(names) != 3 {
+		t.Errorf("count = %v, want 3 (serde, tokio, assert_cmd)", len(names))
 	}
 }
 
@@ -912,11 +897,8 @@ gem 'puma', '~> 5.0'
 group :test do
   gem 'rspec', '~> 3.0'
 end`
-	count, err := parseGemfile(content)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if count != 3 {
-		t.Errorf("count = %v, want 3", count)
+	names := parseGemfile(content)
+	if len(names) != 3 {
+		t.Errorf("count = %v, want 3", len(names))
 	}
 }

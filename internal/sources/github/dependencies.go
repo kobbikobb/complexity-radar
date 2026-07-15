@@ -4,38 +4,48 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
+	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/kobbikobb/complexity-radar/internal/model"
 )
 
-// dependencyFiles lists files to check for dependencies, in priority order.
-var dependencyFiles = []struct {
-	path  string
-	parse func(string) (float64, error)
-}{
-	{"package.json", parsePackageJSON},
-	{"go.mod", parseGoMod},
-	{"pom.xml", parsePomXML},
-	{"requirements.txt", parseRequirementsTxt},
-	{"Cargo.toml", parseCargoToml},
-	{"Gemfile", parseGemfile},
+// manifestParser matches dependency manifests by file name and extracts
+// the bare dependency names for a given stack.
+type manifestParser struct {
+	stack string
+	match func(fileName string) bool
+	parse func(content string) []string
+}
+
+func exact(name string) func(string) bool {
+	return func(f string) bool { return f == name }
+}
+
+var dependencyManifests = []manifestParser{
+	{"npm", exact("package.json"), parsePackageJSON},
+	{"go", exact("go.mod"), parseGoMod},
+	{"maven", exact("pom.xml"), parsePomXML},
+	{"python", func(f string) bool { return strings.HasPrefix(f, "requirements") && strings.HasSuffix(f, ".txt") }, parseRequirementsTxt},
+	{"python", exact("pyproject.toml"), parsePyprojectToml},
+	{"nuget", func(f string) bool { return strings.HasSuffix(f, ".csproj") }, parseCsproj},
+	{"cargo", exact("Cargo.toml"), parseCargoToml},
+	{"ruby", exact("Gemfile"), parseGemfile},
 }
 
 func collectDependencyCount(ctx context.Context, client APIClient, owner, name, branch string, tree *GitTree) ([]model.SourceMetric, error) {
-	parseMap := map[string]func(string) (float64, error){}
-	for _, df := range dependencyFiles {
-		parseMap[df.path] = df.parse
-	}
-
-	var total float64
-	var manifestCount int
+	sets := map[string]map[string]struct{}{}
 	for _, entry := range tree.Tree {
+		if isVendored(entry.Path) {
+			continue
+		}
 		fileName := entry.Path
 		if idx := strings.LastIndex(fileName, "/"); idx >= 0 {
 			fileName = fileName[idx+1:]
 		}
-		parse, ok := parseMap[fileName]
+		mp, ok := matchManifest(fileName)
 		if !ok {
 			continue
 		}
@@ -43,38 +53,77 @@ func collectDependencyCount(ctx context.Context, client APIClient, owner, name, 
 		if err != nil {
 			continue
 		}
-		count, err := parse(content)
-		if err != nil {
-			continue
+		set := sets[mp.stack]
+		if set == nil {
+			set = map[string]struct{}{}
+			sets[mp.stack] = set
 		}
-		total += count
-		manifestCount++
+		for _, dep := range mp.parse(content) {
+			if dep != "" {
+				set[dep] = struct{}{}
+			}
+		}
 	}
 
-	if manifestCount == 0 {
-		return []model.SourceMetric{
-			{Type: model.MetricTypeDependencyCount, Value: 0},
-		}, nil
+	total := 0
+	stacks := make([]string, 0, len(sets))
+	for stack := range sets {
+		stacks = append(stacks, stack)
+		total += len(sets[stack])
+	}
+	sort.Strings(stacks)
+	parts := make([]string, 0, len(stacks))
+	for _, stack := range stacks {
+		parts = append(parts, fmt.Sprintf("%s=%d", stack, len(sets[stack])))
+	}
+	if total > 0 {
+		log.Printf("distinct dependencies by stack: %s (total=%d)", strings.Join(parts, " "), total)
 	}
 
 	return []model.SourceMetric{
-		{Type: model.MetricTypeDependencyCount, Value: total / float64(manifestCount)},
+		{Type: model.MetricTypeDependencyCount, Value: float64(total)},
 	}, nil
 }
 
-func parsePackageJSON(content string) (float64, error) {
+func matchManifest(fileName string) (manifestParser, bool) {
+	for _, mp := range dependencyManifests {
+		if mp.match(fileName) {
+			return mp, true
+		}
+	}
+	return manifestParser{}, false
+}
+
+func isVendored(path string) bool {
+	for _, seg := range strings.Split(path, "/") {
+		switch seg {
+		case "node_modules", "vendor", ".venv":
+			return true
+		}
+	}
+	return false
+}
+
+func parsePackageJSON(content string) []string {
 	var pkg struct {
 		Dependencies    map[string]string `json:"dependencies"`
 		DevDependencies map[string]string `json:"devDependencies"`
 	}
 	if err := json.Unmarshal([]byte(content), &pkg); err != nil {
-		return 0, fmt.Errorf("parsing package.json: %w", err)
+		return nil
 	}
-	return float64(len(pkg.Dependencies) + len(pkg.DevDependencies)), nil
+	names := make([]string, 0, len(pkg.Dependencies)+len(pkg.DevDependencies))
+	for n := range pkg.Dependencies {
+		names = append(names, n)
+	}
+	for n := range pkg.DevDependencies {
+		names = append(names, n)
+	}
+	return names
 }
 
-func parseGoMod(content string) (float64, error) {
-	count := 0
+func parseGoMod(content string) []string {
+	var names []string
 	inRequire := false
 	for _, line := range strings.Split(content, "\n") {
 		line = strings.TrimSpace(line)
@@ -87,43 +136,124 @@ func parseGoMod(content string) (float64, error) {
 			continue
 		}
 		if inRequire && line != "" && !strings.HasPrefix(line, "//") {
-			count++
+			names = append(names, strings.Fields(line)[0])
+			continue
 		}
 		// Single-line require: require github.com/foo/bar v1.0.0
 		if !inRequire && strings.HasPrefix(line, "require ") && !strings.HasSuffix(line, "(") {
-			count++
+			if fields := strings.Fields(line); len(fields) >= 2 {
+				names = append(names, fields[1])
+			}
 		}
 	}
-	return float64(count), nil
+	return names
 }
 
-func parsePomXML(content string) (float64, error) {
-	// Simple count of <dependency> elements.
-	// Note: This counts occurrences in the raw XML, which may include
-	// comments or CDATA sections. For accurate parsing, use a proper XML parser.
-	count := strings.Count(content, "<dependency>")
-	return float64(count), nil
+var (
+	pomDependencyRe = regexp.MustCompile(`(?s)<dependency>(.*?)</dependency>`)
+	pomGroupRe      = regexp.MustCompile(`<groupId>(.*?)</groupId>`)
+	pomArtifactRe   = regexp.MustCompile(`<artifactId>(.*?)</artifactId>`)
+)
+
+func parsePomXML(content string) []string {
+	var names []string
+	for _, block := range pomDependencyRe.FindAllStringSubmatch(content, -1) {
+		var name string
+		if g := pomGroupRe.FindStringSubmatch(block[1]); len(g) > 1 {
+			name = strings.TrimSpace(g[1])
+		}
+		if a := pomArtifactRe.FindStringSubmatch(block[1]); len(a) > 1 {
+			if name != "" {
+				name += ":"
+			}
+			name += strings.TrimSpace(a[1])
+		}
+		if name != "" {
+			names = append(names, name)
+		}
+	}
+	return names
 }
 
-func parseRequirementsTxt(content string) (float64, error) {
-	count := 0
+func parseRequirementsTxt(content string) []string {
+	var names []string
 	for _, line := range strings.Split(content, "\n") {
 		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") {
+		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "-") {
 			continue
 		}
-		// Count -r includes as dependencies
-		if strings.HasPrefix(line, "-r ") || strings.HasPrefix(line, "-e ") {
-			count++
-			continue
+		if name := pyPackageName(line); name != "" {
+			names = append(names, name)
 		}
-		count++
 	}
-	return float64(count), nil
+	return names
 }
 
-func parseCargoToml(content string) (float64, error) {
-	count := 0
+func parsePyprojectToml(content string) []string {
+	var names []string
+	section := ""
+	inProjectDeps := false
+	for _, raw := range strings.Split(content, "\n") {
+		line := strings.TrimSpace(raw)
+		if strings.HasPrefix(line, "[") {
+			section = line
+			inProjectDeps = false
+			continue
+		}
+		switch section {
+		case "[project]":
+			if strings.HasPrefix(line, "dependencies") && strings.Contains(line, "[") {
+				inProjectDeps = true
+				line = line[strings.Index(line, "[")+1:]
+			}
+			if inProjectDeps {
+				if idx := strings.Index(line, "]"); idx >= 0 {
+					line = line[:idx]
+					inProjectDeps = false
+				}
+				for _, item := range strings.Split(line, ",") {
+					item = strings.Trim(strings.TrimSpace(item), `"'`)
+					if name := pyPackageName(item); name != "" {
+						names = append(names, name)
+					}
+				}
+			}
+		case "[tool.poetry.dependencies]", "[tool.poetry.dev-dependencies]":
+			if line == "" || strings.HasPrefix(line, "#") {
+				continue
+			}
+			key := strings.ToLower(strings.Trim(strings.TrimSpace(strings.SplitN(line, "=", 2)[0]), `"'`))
+			if key != "" && key != "python" {
+				names = append(names, key)
+			}
+		}
+	}
+	return names
+}
+
+// pyPackageName strips version specifiers, extras and markers to a bare name.
+func pyPackageName(spec string) string {
+	name := strings.FieldsFunc(spec, func(r rune) bool {
+		return strings.ContainsRune(" <>=!~;[(", r)
+	})
+	if len(name) == 0 {
+		return ""
+	}
+	return strings.ToLower(name[0])
+}
+
+var csprojPackageRe = regexp.MustCompile(`<PackageReference\s+[^>]*Include\s*=\s*"([^"]+)"`)
+
+func parseCsproj(content string) []string {
+	var names []string
+	for _, m := range csprojPackageRe.FindAllStringSubmatch(content, -1) {
+		names = append(names, m[1])
+	}
+	return names
+}
+
+func parseCargoToml(content string) []string {
+	var names []string
 	inDeps := false
 	for _, line := range strings.Split(content, "\n") {
 		line = strings.TrimSpace(line)
@@ -135,19 +265,22 @@ func parseCargoToml(content string) (float64, error) {
 			inDeps = false
 		}
 		if inDeps && line != "" && !strings.HasPrefix(line, "#") && strings.Contains(line, "=") {
-			count++
+			names = append(names, strings.TrimSpace(strings.SplitN(line, "=", 2)[0]))
 		}
 	}
-	return float64(count), nil
+	return names
 }
 
-func parseGemfile(content string) (float64, error) {
-	count := 0
+func parseGemfile(content string) []string {
+	var names []string
 	for _, line := range strings.Split(content, "\n") {
 		line = strings.TrimSpace(line)
 		if strings.HasPrefix(line, "gem ") || strings.HasPrefix(line, "gem\t") {
-			count++
+			name := strings.Trim(strings.SplitN(strings.TrimSpace(line[3:]), ",", 2)[0], ` '"`)
+			if name != "" {
+				names = append(names, name)
+			}
 		}
 	}
-	return float64(count), nil
+	return names
 }
