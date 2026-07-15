@@ -21,9 +21,9 @@ var sourceExtensions = map[string]bool{
 	".cs": true, ".go": true, ".java": true, ".rb": true, ".kt": true, ".scala": true, ".rs": true,
 }
 
-// controlFlowRe matches decision-point tokens; `else if` is covered by `if` and `??` by `?`.
+// controlFlowRe matches decision-point tokens; `else if` is covered by `if` and `??` counts once (like `||`).
 // It does not strip comments/strings, so tokens there are counted too (documented limitation).
-var controlFlowRe = regexp.MustCompile(`\b(?:if|elif|for|while|case|when|catch|except)\b|&&|\|\||\?`)
+var controlFlowRe = regexp.MustCompile(`\b(?:if|elif|for|while|case|when|catch|except)\b|&&|\|\||\?\?|\?`)
 
 // complexity approximates a file's decision-point count: 1 + control-flow tokens.
 func complexity(fileText string) int {

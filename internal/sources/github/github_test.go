@@ -638,12 +638,14 @@ func TestComplexity(t *testing.T) {
 		code string
 		want int
 	}{
-		{"empty is base 1", "", 1},
-		{"python if/elif/for/except", "if a:\n    pass\nelif b:\n    pass\nfor x in y:\n    pass\nexcept E:\n    pass", 5},
-		{"go if/for/case/&&/||", "if a && b {\n}\nfor {\n}\nswitch {\ncase 1:\n}\nif c || d {\n}", 7},
-		{"ts ternary and nullish", "const x = a ? b : c;\nconst y = a ?? b;\nif (p) {}", 5},
-		{"ruby when/while", "case x\nwhen 1\nend\nwhile y\nend", 4},
-		{"word boundary: notify does not count if", "notify(user)\nverify(x)\nclassifier()", 1},
+		{"should be base 1 for empty file", "", 1},
+		{"should count python if/elif/for/except", "if a:\n    pass\nelif b:\n    pass\nfor x in y:\n    pass\nexcept E:\n    pass", 5},
+		{"should count go if/for/case/&&/||", "if a && b {\n}\nfor {\n}\nswitch {\ncase 1:\n}\nif c || d {\n}", 7},
+		{"should count a ternary once", "const x = a ? b : c;", 2},
+		{"should count nullish coalescing once", "const y = a ?? b;", 2},
+		{"should count ts ternary and nullish", "const x = a ? b : c;\nconst y = a ?? b;\nif (p) {}", 4},
+		{"should count ruby when/while", "case x\nwhen 1\nend\nwhile y\nend", 4},
+		{"should not count keywords inside identifiers", "notify(user)\nverify(x)\nclassifier()", 1},
 	}
 
 	for _, tt := range tests {
@@ -664,11 +666,11 @@ func TestPercentile(t *testing.T) {
 		q      float64
 		want   float64
 	}{
-		{"empty", nil, 0.95, 0},
-		{"single", []float64{7}, 0.95, 7},
-		{"two p95 interpolates toward top", []float64{2, 10}, 0.95, 9.6},
-		{"median of odd", []float64{1, 2, 3}, 0.5, 2},
-		{"p95 of ten", []float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, 0.95, 9.55},
+		{"should return 0 for an empty slice", nil, 0.95, 0},
+		{"should return the value for a single element", []float64{7}, 0.95, 7},
+		{"should interpolate p95 toward the top for two elements", []float64{2, 10}, 0.95, 9.6},
+		{"should return the median for odd-length input", []float64{1, 2, 3}, 0.5, 2},
+		{"should compute p95 for ten elements", []float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, 0.95, 9.55},
 	}
 
 	for _, tt := range tests {
@@ -686,17 +688,18 @@ func TestServiceKey(t *testing.T) {
 	manifestDirs := map[string]bool{"services/api": true, ".": true}
 
 	tests := []struct {
+		name string
 		path string
 		want string
 	}{
-		{"services/api/handler.go", "services/api"},
-		{"services/api/internal/db/store.go", "services/api"},
-		{"main.go", "."},
-		{"scripts/tool.py", "."},
+		{"should return the nearest ancestor manifest dir", "services/api/handler.go", "services/api"},
+		{"should return the nearest manifest dir for a deep path", "services/api/internal/db/store.go", "services/api"},
+		{"should return the root bucket for a top-level file", "main.go", "."},
+		{"should return the root bucket for a script dir", "scripts/tool.py", "."},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.path, func(t *testing.T) {
+		t.Run(tt.name, func(t *testing.T) {
 			got := serviceKey(tt.path, manifestDirs)
 
 			if got != tt.want {
