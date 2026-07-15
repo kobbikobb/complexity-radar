@@ -6,6 +6,7 @@ import (
 	"github.com/kobbikobb/complexity-radar/internal/collector"
 	"github.com/kobbikobb/complexity-radar/internal/runner"
 	"github.com/kobbikobb/complexity-radar/internal/sources/github"
+	"github.com/kobbikobb/complexity-radar/internal/store"
 	"github.com/spf13/cobra"
 )
 
@@ -31,11 +32,16 @@ func runCollect(cmd *cobra.Command, args []string) error {
 	dbPath, _ := cmd.Flags().GetString("db")
 	projectName, _ := cmd.Flags().GetString("project")
 
-	r, err := runner.New(dbPath, projectName, github.NewSource())
+	s, err := store.New(dbPath)
 	if err != nil {
 		return err
 	}
-	defer func() { _ = r.Close() }()
+	defer func() { _ = s.Close() }()
+
+	r, err := runner.NewFromStore(s, projectName, github.NewSource())
+	if err != nil {
+		return err
+	}
 
 	result, err := r.Run(cmd.Context(), func(e collector.ProgressEvent) {
 		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), e.Message)
