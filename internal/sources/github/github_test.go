@@ -375,7 +375,7 @@ func TestSupportedMetrics(t *testing.T) {
 		model.MetricTypeDeployFrequency,
 		model.MetricTypeStalePRs,
 		model.MetricTypeDependencyCount,
-		model.MetricTypeCyclomaticP95,
+		model.MetricTypeDecisionDensity,
 		model.MetricTypeK8sDeployments,
 		model.MetricTypeContainerImages,
 		model.MetricTypeDeployTargets,
@@ -717,7 +717,7 @@ func TestServiceKeyNoManifestIsRootBucket(t *testing.T) {
 	}
 }
 
-func TestCollectCyclomaticP95CapsReadsLargestFirst(t *testing.T) {
+func TestCollectDecisionDensityCapsReadsLargestFirst(t *testing.T) {
 	// Arrange
 	const candidates = maxComplexityFileReads + 50
 	paths := make([]string, candidates)
@@ -765,7 +765,7 @@ func TestCollectCyclomaticP95CapsReadsLargestFirst(t *testing.T) {
 	}
 }
 
-func TestCollectCyclomaticP95(t *testing.T) {
+func TestCollectDecisionDensity(t *testing.T) {
 	// Arrange
 	simple := "package p\nfunc a() {}"
 	complex := "package p\nfunc b() {\n  if x { }\n  for { }\n  if y && z { }\n}"
@@ -790,14 +790,16 @@ func TestCollectCyclomaticP95(t *testing.T) {
 	}
 
 	// Assert
-	m, ok := findMetric(metrics, model.MetricTypeCyclomaticP95)
+	m, ok := findMetric(metrics, model.MetricTypeDecisionDensity)
 	if !ok {
-		t.Fatal("missing cyclomatic_p95 metric")
+		t.Fatal("missing decision_density metric")
 	}
-	// one service (root, go.mod), sampled complexities {1, 5}; p95 interpolates toward 5.
-	want := percentile([]float64{1, 5}, 0.95)
+	// one service (root, go.mod); densities are tokens per 100 non-blank lines; p95 interpolates toward the larger.
+	dSimple := float64(complexity(simple)) / float64(nonBlankLineCount(simple)) * 100
+	dComplex := float64(complexity(complex)) / float64(nonBlankLineCount(complex)) * 100
+	want := percentile([]float64{dSimple, dComplex}, 0.95)
 	if math.Abs(m.Value-want) > 1e-9 {
-		t.Errorf("cyclomatic p95 = %v, want %v", m.Value, want)
+		t.Errorf("decision density = %v, want %v", m.Value, want)
 	}
 	for _, p := range client.fileReads {
 		if p == "vendor/dep.go" {
@@ -806,7 +808,7 @@ func TestCollectCyclomaticP95(t *testing.T) {
 	}
 }
 
-func TestCollectCyclomaticP95NoSource(t *testing.T) {
+func TestCollectDecisionDensityNoSource(t *testing.T) {
 	responses := defaultResponses()
 	responses["/repos/org/repo/git/trees/main"] = makeTreeJSON([]string{"README.md", "docs/guide.txt"})
 
@@ -819,12 +821,12 @@ func TestCollectCyclomaticP95NoSource(t *testing.T) {
 		t.Fatalf("Collect: %v", err)
 	}
 
-	m, ok := findMetric(metrics, model.MetricTypeCyclomaticP95)
+	m, ok := findMetric(metrics, model.MetricTypeDecisionDensity)
 	if !ok {
-		t.Fatal("missing cyclomatic_p95 metric")
+		t.Fatal("missing decision_density metric")
 	}
 	if m.Value != noDataValue {
-		t.Errorf("cyclomatic p95 = %v, want %v", m.Value, noDataValue)
+		t.Errorf("decision density = %v, want %v", m.Value, noDataValue)
 	}
 }
 
@@ -851,6 +853,51 @@ func TestIsGenerated(t *testing.T) {
 	}
 }
 
+func TestNonBlankLineCount(t *testing.T) {
+	// Arrange
+	s := "package p\n\n   \n\tif a {}\ncode"
+
+	// Act
+	got := nonBlankLineCount(s)
+
+	// Assert
+	if got != 3 {
+		t.Errorf("nonBlankLineCount(%q) = %d, want 3 (blank and whitespace-only lines excluded)", s, got)
+	}
+}
+
+func decisionDensity(content string) float64 {
+	return float64(complexity(content)) / float64(nonBlankLineCount(content)) * 100
+}
+
+func TestDecisionDensityValue(t *testing.T) {
+	// Arrange
+	content := "if a {}\nif b {}\nx := 1\ny := 2" // 2 tokens (+1) over 4 non-blank lines
+
+	// Act
+	got := decisionDensity(content)
+
+	// Assert
+	if got != 75 {
+		t.Errorf("decisionDensity = %v, want 75 (3 decision points per 4 lines ×100/4)", got)
+	}
+}
+
+func TestDecisionDensityIsSizeNeutral(t *testing.T) {
+	// Arrange
+	denseSmall := "if a {}\nif b {}"
+	largeSparse := "package p\n" + strings.Repeat("x := 1\n", 100) + "if a {}"
+
+	// Act
+	dense := decisionDensity(denseSmall)
+	sparse := decisionDensity(largeSparse)
+
+	// Assert
+	if dense <= sparse {
+		t.Errorf("dense small file should have higher density than large sparse file: dense=%v sparse=%v", dense, sparse)
+	}
+}
+
 func TestLongestLineLen(t *testing.T) {
 	// Arrange
 	s := "ab\ncdef\ng"
@@ -864,7 +911,7 @@ func TestLongestLineLen(t *testing.T) {
 	}
 }
 
-func TestCollectCyclomaticP95SkipsMinifiedContent(t *testing.T) {
+func TestCollectDecisionDensitySkipsMinifiedContent(t *testing.T) {
 	// Arrange
 	normal := "package p\nif a {}"
 	minified := "package p\n" + strings.Repeat("if x ", 2000)
@@ -888,12 +935,13 @@ func TestCollectCyclomaticP95SkipsMinifiedContent(t *testing.T) {
 	}
 
 	// Assert
-	m, ok := findMetric(metrics, model.MetricTypeCyclomaticP95)
+	m, ok := findMetric(metrics, model.MetricTypeDecisionDensity)
 	if !ok {
-		t.Fatal("missing cyclomatic_p95 metric")
+		t.Fatal("missing decision_density metric")
 	}
-	if m.Value != 2 {
-		t.Errorf("cyclomatic p95 = %v, want 2 (minified file excluded, only normal.go counted)", m.Value)
+	// normal.go: complexity 2 over 2 non-blank lines → 100 per 100 loc; minified file excluded.
+	if m.Value != 100 {
+		t.Errorf("decision density = %v, want 100 (minified file excluded, only normal.go counted)", m.Value)
 	}
 }
 

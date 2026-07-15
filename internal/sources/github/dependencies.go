@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"path"
 	"regexp"
 	"sort"
 	"strings"
@@ -38,6 +39,7 @@ var dependencyManifests = []manifestParser{
 
 func collectDependencyCount(ctx context.Context, client APIClient, owner, name, branch string, tree *GitTree) ([]model.SourceMetric, error) {
 	sets := map[string]map[string]struct{}{}
+	serviceDirs := map[string]bool{}
 	for _, entry := range tree.Tree {
 		if isVendored(entry.Path) {
 			continue
@@ -50,6 +52,7 @@ func collectDependencyCount(ctx context.Context, client APIClient, owner, name, 
 		if !ok {
 			continue
 		}
+		serviceDirs[path.Dir(entry.Path)] = true
 		content, err := client.GetFileContent(ctx, owner, name, entry.Path, branch)
 		if err != nil {
 			continue
@@ -77,12 +80,14 @@ func collectDependencyCount(ctx context.Context, client APIClient, owner, name, 
 	for _, stack := range stacks {
 		parts = append(parts, fmt.Sprintf("%s=%d", stack, len(sets[stack])))
 	}
+	serviceCount := max(1, len(serviceDirs))
 	if total > 0 {
-		log.Printf("distinct dependencies by stack: %s (total=%d)", strings.Join(parts, " "), total)
+		log.Printf("distinct dependencies by stack: %s (total=%d, %d services)", strings.Join(parts, " "), total, serviceCount)
 	}
 
 	return []model.SourceMetric{
-		{Type: model.MetricTypeDependencyCount, Value: float64(total)},
+		{Type: model.MetricTypeDependencyCount, Value: float64(total) / float64(serviceCount)},
+		{Type: model.MetricTypeDependencyTotal, Value: float64(total)},
 	}, nil
 }
 

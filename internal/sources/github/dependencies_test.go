@@ -22,11 +22,41 @@ func depCount(t *testing.T, files map[string]string) float64 {
 	if err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
-	m, ok := findMetric(metrics, model.MetricTypeDependencyCount)
+	m, ok := findMetric(metrics, model.MetricTypeDependencyTotal)
 	if !ok {
-		t.Fatal("missing dependency_count metric")
+		t.Fatal("missing dependency_total metric")
 	}
 	return m.Value
+}
+
+func TestCollectDependencyPerService(t *testing.T) {
+	t.Run("should score distinct deps divided by service count", func(t *testing.T) {
+		// Arrange
+		files := map[string]string{
+			"app/package.json": `{"dependencies": {"react": "^18", "next": "^13", "lodash": "^4"}}`,
+			"svc/go.mod":       "module x\nrequire (\n\tgithub.com/foo/bar v1\n\tgithub.com/baz/qux v2\n)",
+		}
+		paths := []string{"app/package.json", "svc/go.mod"}
+		client := &mockClient{responses: defaultResponses(), fileContents: files}
+		client.responses["/repos/org/repo/git/trees/main"] = makeTreeJSON(paths)
+		src := NewSourceWithClient(client)
+
+		// Act
+		metrics, err := src.Collect(context.Background(), model.Repository{URL: "github.com/org/repo", Branch: "main"})
+		if err != nil {
+			t.Fatalf("Collect: %v", err)
+		}
+
+		// Assert
+		scored, _ := findMetric(metrics, model.MetricTypeDependencyCount)
+		total, _ := findMetric(metrics, model.MetricTypeDependencyTotal)
+		if scored.Value != 2.5 {
+			t.Errorf("dependency_count = %v, want 2.5 (5 deps / 2 services)", scored.Value)
+		}
+		if total.Value != 5 {
+			t.Errorf("dependency_total = %v, want 5 (raw distinct total)", total.Value)
+		}
+	})
 }
 
 func TestCollectDependencyCountUnion(t *testing.T) {

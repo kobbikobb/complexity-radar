@@ -48,8 +48,8 @@ func TestNormalizeMetricLowerIsBetter(t *testing.T) {
 		{"low deploy_targets", model.MetricTypeDeployTargets, 5, 50, 90},
 
 		{"zero dependency_count", model.MetricTypeDependencyCount, 0, 100, 100},
-		{"low dependency_count", model.MetricTypeDependencyCount, 50, 30, 70},
-		{"high dependency_count", model.MetricTypeDependencyCount, 300, 0, 30},
+		{"low dependency_count", model.MetricTypeDependencyCount, 5, 30, 70},
+		{"high dependency_count", model.MetricTypeDependencyCount, 20, 0, 30},
 	}
 
 	for _, tt := range tests {
@@ -115,17 +115,17 @@ func TestNormalizeMetricClamped(t *testing.T) {
 	}
 }
 
-func TestNormalizeMetricCyclomaticP95(t *testing.T) {
-	low := NormalizeMetric(model.MetricTypeCyclomaticP95, 10)
-	high := NormalizeMetric(model.MetricTypeCyclomaticP95, 200)
+func TestNormalizeMetricDecisionDensity(t *testing.T) {
+	low := NormalizeMetric(model.MetricTypeDecisionDensity, 10)
+	high := NormalizeMetric(model.MetricTypeDecisionDensity, 200)
 
 	if low <= high {
-		t.Errorf("expected higher complexity to score lower: low(10)=%v high(200)=%v", low, high)
+		t.Errorf("expected higher density to score lower: low(10)=%v high(200)=%v", low, high)
 	}
-	if got := NormalizeMetric(model.MetricTypeCyclomaticP95, 0); !approxEqual(got, 100) {
+	if got := NormalizeMetric(model.MetricTypeDecisionDensity, 0); !approxEqual(got, 100) {
 		t.Errorf("value 0 = %v, want 100", got)
 	}
-	if got := NormalizeMetric(model.MetricTypeCyclomaticP95, -1.0); !math.IsNaN(got) {
+	if got := NormalizeMetric(model.MetricTypeDecisionDensity, -1.0); !math.IsNaN(got) {
 		t.Errorf("no-data = %v, want NaN", got)
 	}
 }
@@ -245,7 +245,7 @@ func TestScoreDimensionsAllDimensions(t *testing.T) {
 func TestScoreDimensionsCode(t *testing.T) {
 	metrics := map[model.MetricTypeName]float64{
 		model.MetricTypeDependencyCount: 0, // 100
-		model.MetricTypeCyclomaticP95:   0, // 100
+		model.MetricTypeDecisionDensity: 0, // 100
 	}
 	results := ScoreDimensions(metrics)
 
@@ -262,7 +262,7 @@ func TestScoreDimensionsCode(t *testing.T) {
 		t.Errorf("code score = %v, want 100", code.Score)
 	}
 	if code.MetricCount != 2 {
-		t.Errorf("code metric count = %d, want 2 (dependency_count + cyclomatic_p95)", code.MetricCount)
+		t.Errorf("code metric count = %d, want 2 (dependency_count + decision_density)", code.MetricCount)
 	}
 }
 
@@ -312,7 +312,7 @@ func TestScoreUnequalDimensionScores(t *testing.T) {
 		model.MetricTypeSecurityVulnerabilities: 0,   // 100
 		model.MetricTypeBuildSuccessRatio:       0,   // delivery: 0
 		model.MetricTypeK8sDeployments:          50,  // infra: ~26 (log scale)
-		model.MetricTypeDependencyCount:         200, // code: ~15 (log scale)
+		model.MetricTypeDependencyCount:         200, // code: 0 (well above ref, log scale)
 	}
 	weights := map[model.Dimension]float64{
 		model.DimensionSecurity:       0.25,
@@ -349,11 +349,11 @@ func TestScoreWithDefaults(t *testing.T) {
 		model.MetricTypeSecurityVulnerabilities: 0,
 		model.MetricTypeBuildSuccessRatio:       0.5,
 		model.MetricTypeK8sDeployments:          25,
-		model.MetricTypeDependencyCount:         100,
+		model.MetricTypeDependencyCount:         2,
 	}
 	result := ScoreWithDefaults(metrics)
 	// With log scale, scores will differ from linear
-	// security=100, delivery=50, infra=~63, code=~70
+	// security=100, delivery=50, infra=~63, code=~64 (deps/service)
 	// overall should be reasonable
 	if result.Overall < 50 || result.Overall > 80 {
 		t.Errorf("overall = %v, want between 50 and 80", result.Overall)

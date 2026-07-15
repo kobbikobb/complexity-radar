@@ -339,7 +339,7 @@ func TestBuildFromDBWithMultipleMetrics(t *testing.T) {
 	}{
 		{model.MetricTypeSecurityVulnerabilities, 5},
 		{model.MetricTypeBuildSuccessRatio, 0.9},
-		{model.MetricTypeDependencyCount, 100},
+		{model.MetricTypeDependencyCount, 5},
 	}
 
 	for _, md := range metricData {
