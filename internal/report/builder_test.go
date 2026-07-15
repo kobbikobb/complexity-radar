@@ -511,6 +511,78 @@ func TestBuildFromDBGetMetricsError(t *testing.T) {
 	}
 }
 
+func TestBuildFromDBSkipsRetiredMetricTypes(t *testing.T) {
+	// Arrange
+	weights := scorer.WeightsFromConfig(testConfig().Weights)
+	wantScore := scorer.Score(map[model.MetricTypeName]float64{
+		model.MetricTypeSecurityVulnerabilities: 3,
+	}, weights).Overall
+
+	s := &stubStore{
+		metrics: []model.Metric{
+			{MetricTypeID: 1, Value: 3},
+			{MetricTypeID: 99, Value: 5000},
+		},
+		byID: map[int64]*model.MetricType{
+			1:  {ID: 1, Name: model.MetricTypeSecurityVulnerabilities, Dimension: model.DimensionSecurity, Unit: "count"},
+			99: {ID: 99, Name: "code_loc", Dimension: model.DimensionCode, Unit: "count"},
+		},
+		byName: map[model.MetricTypeName]*model.MetricType{
+			model.MetricTypeSecurityVulnerabilities: {ID: 1, Name: model.MetricTypeSecurityVulnerabilities, Dimension: model.DimensionSecurity, Unit: "count"},
+		},
+	}
+
+	// Act
+	reports, err := BuildFromDB(s, model.Project{ID: 1, Name: "Stale"}, testConfig(), nil)
+	if err != nil {
+		t.Fatalf("BuildFromDB: %v", err)
+	}
+
+	// Assert
+	if len(reports) != 1 {
+		t.Fatalf("got %d reports, want 1", len(reports))
+	}
+	for _, m := range reports[0].Metrics {
+		if m.Name == "code_loc" {
+			t.Error("retired metric code_loc should not appear in report")
+		}
+	}
+	if len(reports[0].Metrics) != 1 {
+		t.Errorf("got %d metrics, want 1 (retired type skipped)", len(reports[0].Metrics))
+	}
+	if reports[0].OverallScore != wantScore {
+		t.Errorf("overall score = %v, want %v (retired metric must not affect scoring)", reports[0].OverallScore, wantScore)
+	}
+}
+
+type stubStore struct {
+	metrics []model.Metric
+	byID    map[int64]*model.MetricType
+	byName  map[model.MetricTypeName]*model.MetricType
+}
+
+func (s *stubStore) GetMetricTypeByName(name model.MetricTypeName) (*model.MetricType, error) {
+	if mt, ok := s.byName[name]; ok {
+		return mt, nil
+	}
+	return nil, &testError{"unknown metric type"}
+}
+
+func (s *stubStore) GetMetricTypeByID(id int64) (*model.MetricType, error) {
+	if mt, ok := s.byID[id]; ok {
+		return mt, nil
+	}
+	return nil, &testError{"unknown metric type id"}
+}
+
+func (s *stubStore) ListRepositories(_ int64) ([]model.Repository, error) {
+	return []model.Repository{{ID: 1, URL: "github.com/org/repo"}}, nil
+}
+
+func (s *stubStore) GetMetricsByRepository(_ int64) ([]model.Metric, error) {
+	return s.metrics, nil
+}
+
 type failingStore struct {
 	listErr    bool
 	metricsErr bool

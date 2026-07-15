@@ -570,44 +570,58 @@ jobs:
 }
 
 func TestCollectDeployTargets(t *testing.T) {
-	workflow := `name: CI
+	// Arrange
+	prod := `name: Prod
 on: push
 jobs:
   deploy:
-    runs-on: ubuntu-latest
     environment: production`
+	staging := `name: Staging
+on: push
+jobs:
+  deploy:
+    environment: staging`
 
 	responses := defaultResponses()
-	responses["/repos/org/repo/git/trees/main"] = makeTreeJSON([]string{".github/workflows/ci.yml"})
+	responses["/repos/org/repo/git/trees/main"] = makeTreeJSON([]string{
+		".github/workflows/prod.yml",
+		".github/workflows/staging.yml",
+	})
 
 	client := &mockClient{
-		responses:    responses,
-		fileContents: map[string]string{".github/workflows/ci.yml": workflow},
+		responses: responses,
+		fileContents: map[string]string{
+			".github/workflows/prod.yml":    prod,
+			".github/workflows/staging.yml": staging,
+		},
 	}
 
 	src := NewSourceWithClient(client)
 	repo := model.Repository{URL: "github.com/org/repo", Branch: "main"}
 
+	// Act
 	metrics, err := src.Collect(context.Background(), repo)
 	if err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
+	// Assert
 	m, ok := findMetric(metrics, model.MetricTypeDeployTargets)
 	if !ok {
 		t.Fatal("missing deploy_targets metric")
 	}
-	if m.Value != 1 {
-		t.Errorf("deploy targets = %v, want 1", m.Value)
+	if m.Value != 2 {
+		t.Errorf("deploy targets = %v, want 2 (distinct count, not averaged over 2 workflows)", m.Value)
 	}
 }
 
 func TestCollectK8sDeployments(t *testing.T) {
+	// Arrange
 	responses := defaultResponses()
 	responses["/repos/org/repo/git/trees/main"] = makeTreeJSON([]string{
 		"k8s/deployment.yaml",
 		"k8s/service.yaml",
-		"k8s/ingress.yml",
+		"deploy/ingress.yml",
 		"src/main.go",
 	})
 
@@ -616,17 +630,19 @@ func TestCollectK8sDeployments(t *testing.T) {
 	src := NewSourceWithClient(client)
 	repo := model.Repository{URL: "github.com/org/repo", Branch: "main"}
 
+	// Act
 	metrics, err := src.Collect(context.Background(), repo)
 	if err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
+	// Assert
 	m, ok := findMetric(metrics, model.MetricTypeK8sDeployments)
 	if !ok {
 		t.Fatal("missing k8s_deployments metric")
 	}
 	if m.Value != 3 {
-		t.Errorf("k8s deployments = %v, want 3", m.Value)
+		t.Errorf("k8s deployments = %v, want 3 (distinct count, not averaged over 2 subdirs)", m.Value)
 	}
 }
 
