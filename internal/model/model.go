@@ -52,7 +52,7 @@ const (
 	MetricTypeSecurityHigh            MetricTypeName = "security_high"
 	MetricTypeSecurityMedium          MetricTypeName = "security_medium"
 	MetricTypeSecurityLow             MetricTypeName = "security_low"
-	MetricTypeLargeFileRatio          MetricTypeName = "large_file_ratio"
+	MetricTypeCyclomaticP95           MetricTypeName = "cyclomatic_p95"
 )
 
 type MetricType struct {
@@ -108,10 +108,10 @@ func MetricTypes() []MetricType {
 			RawDef:   "distinct third-party deps summed across stacks (npm/go/maven/python/nuget/cargo/ruby); vendored dirs excluded",
 			ScoreDef: "log: 100 - logNorm(value,1500)*100; lower better",
 			Source:   "Git tree + manifest files"},
-		{Name: MetricTypeLargeFileRatio, Dimension: DimensionCode, Unit: "ratio",
-			RawDef:   "blobs >20KB ÷ total blobs; -1 = no data",
-			ScoreDef: "linear: 100 - value*100; lower better",
-			Source:   "Git tree (blob sizes)"},
+		{Name: MetricTypeCyclomaticP95, Dimension: DimensionCode, Unit: "complexity",
+			RawDef:   "per-service p95 of an approximate per-file decision-point count (1 + if/elif/for/while/case/catch/&&/||/? tokens), rolled up as mean of per-service p95; size-biased sample, capped ~400 file reads; vendored dirs excluded; -1=no source",
+			ScoreDef: "log: 100 - logNorm(value,80)*100; lower better",
+			Source:   "Git tree + sampled file contents (regex approximation, NOT AST cyclomatic; counts tokens in comments/strings; file-level not per-function)"},
 	}
 }
 
