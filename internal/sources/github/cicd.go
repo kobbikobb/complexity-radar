@@ -7,13 +7,13 @@ import (
 	"github.com/kobbikobb/complexity-radar/internal/model"
 )
 
-func collectCICDComplexity(ctx context.Context, client APIClient, owner, name, branch string, tree *GitTree) []model.SourceMetric {
+func collectCICDComplexity(workflowContents map[string]string, ctx context.Context, client APIClient, owner, name, branch string) []model.SourceMetric {
 	score := 0.0
 
-	// Score GitHub Actions workflows
-	score += scoreGitHubActions(ctx, client, owner, name, branch, tree)
+	// Score GitHub Actions workflows from cached contents
+	score += scoreGitHubActions(workflowContents)
 
-	// Score other CI systems
+	// Score other CI systems (not in .github/workflows/)
 	score += scoreOtherCISystems(ctx, client, owner, name, branch)
 
 	// Cap at 100
@@ -26,23 +26,14 @@ func collectCICDComplexity(ctx context.Context, client APIClient, owner, name, b
 	}
 }
 
-func scoreGitHubActions(ctx context.Context, client APIClient, owner, name, branch string, tree *GitTree) float64 {
+func scoreGitHubActions(workflowContents map[string]string) float64 {
 	score := 0.0
-	workflowCount := 0
 
-	for _, entry := range tree.Tree {
-		if strings.HasPrefix(entry.Path, ".github/workflows/") &&
-			(strings.HasSuffix(entry.Path, ".yml") || strings.HasSuffix(entry.Path, ".yaml")) {
-			workflowCount++
-			content, err := client.GetFileContent(ctx, owner, name, entry.Path, branch)
-			if err != nil {
-				continue
-			}
-			score += scoreWorkflow(content)
-		}
+	for _, content := range workflowContents {
+		score += scoreWorkflow(content)
 	}
 
-	// Bonus for having multiple workflows
+	workflowCount := len(workflowContents)
 	if workflowCount > 3 {
 		score += float64(workflowCount-3) * 5
 	}

@@ -115,10 +115,13 @@ func (s *Source) Collect(ctx context.Context, repo model.Repository) ([]model.So
 
 	metrics = append(metrics, collectDecisionDensity(ctx, s.client, owner, name, branch, tree)...)
 
+	// Fetch workflow file contents once for both cicd and deploy_targets collectors.
+	workflowContents := s.fetchWorkflowContents(ctx, owner, name, branch, tree)
+
 	metrics = append(metrics, collectK8sDeployments(tree)...)
 	metrics = append(metrics, collectContainerImages(ctx, s.client, owner, name, branch, tree)...)
-	metrics = append(metrics, collectDeployTargets(ctx, s.client, owner, name, branch, tree)...)
-	metrics = append(metrics, collectCICDComplexity(ctx, s.client, owner, name, branch, tree)...)
+	metrics = append(metrics, collectDeployTargets(ctx, s.client, owner, name, branch, workflowContents)...)
+	metrics = append(metrics, collectCICDComplexity(workflowContents, ctx, s.client, owner, name, branch)...)
 
 	return metrics, nil
 }
@@ -143,6 +146,21 @@ func (s *Source) fetchGitTree(ctx context.Context, owner, name, branch string) (
 //   - github.com/owner/repo
 //   - https://github.com/owner/repo
 //   - git@github.com:owner/repo
+func (s *Source) fetchWorkflowContents(ctx context.Context, owner, name, branch string, tree *GitTree) map[string]string {
+	contents := make(map[string]string)
+	for _, entry := range tree.Tree {
+		if strings.HasPrefix(entry.Path, ".github/workflows/") &&
+			(strings.HasSuffix(entry.Path, ".yml") || strings.HasSuffix(entry.Path, ".yaml")) {
+			content, err := s.client.GetFileContent(ctx, owner, name, entry.Path, branch)
+			if err != nil {
+				continue
+			}
+			contents[entry.Path] = content
+		}
+	}
+	return contents
+}
+
 func parseRepoURL(raw string) (owner, name string, err error) {
 	raw = strings.TrimSpace(raw)
 	raw = strings.TrimSuffix(raw, ".git")

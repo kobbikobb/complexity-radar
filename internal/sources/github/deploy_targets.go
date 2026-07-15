@@ -7,18 +7,11 @@ import (
 	"github.com/kobbikobb/complexity-radar/internal/model"
 )
 
-func collectDeployTargets(ctx context.Context, client APIClient, owner, name, branch string, tree *GitTree) []model.SourceMetric {
+func collectDeployTargets(ctx context.Context, client APIClient, owner, name, branch string, workflowContents map[string]string) []model.SourceMetric {
 	targets := make(map[string]bool)
 
-	for _, entry := range tree.Tree {
-		if strings.HasPrefix(entry.Path, ".github/workflows/") &&
-			(strings.HasSuffix(entry.Path, ".yml") || strings.HasSuffix(entry.Path, ".yaml")) {
-			content, err := client.GetFileContent(ctx, owner, name, entry.Path, branch)
-			if err != nil {
-				continue
-			}
-			parseWorkflowEnvironments(content, targets)
-		}
+	for _, content := range workflowContents {
+		parseWorkflowEnvironments(content, targets)
 	}
 
 	collectTargetsFromDeployConfigs(ctx, client, owner, name, branch, targets)
