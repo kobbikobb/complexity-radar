@@ -4,8 +4,8 @@ import (
 	"fmt"
 
 	"github.com/kobbikobb/complexity-radar/internal/collector"
-	"github.com/kobbikobb/complexity-radar/internal/model"
 	"github.com/kobbikobb/complexity-radar/internal/report"
+	"github.com/kobbikobb/complexity-radar/internal/runner"
 	"github.com/kobbikobb/complexity-radar/internal/sources/github"
 	"github.com/kobbikobb/complexity-radar/internal/terminal"
 	"github.com/spf13/cobra"
@@ -33,34 +33,13 @@ func runScan(cmd *cobra.Command, args []string) error {
 	dbPath, _ := cmd.Flags().GetString("db")
 	projectName, _ := cmd.Flags().GetString("project")
 
-	s, err := openStore(dbPath)
+	r, err := runner.New(dbPath, projectName, github.NewSource())
 	if err != nil {
 		return err
 	}
-	defer func() { _ = s.Close() }()
+	defer func() { _ = r.Close() }()
 
-	project, err := findOrCreateProject(s, projectName, "")
-	if err != nil {
-		return err
-	}
-
-	cfg, err := buildConfigFromDB(s, project)
-	if err != nil {
-		return err
-	}
-
-	var repos []model.Repository
-	for _, repoCfg := range cfg.Repositories {
-		repo, err := s.FindOrCreateRepository(project.ID, repoCfg.URL, repoCfg.Branch)
-		if err != nil {
-			return fmt.Errorf("finding repository %s: %w", repoCfg.URL, err)
-		}
-		repos = append(repos, *repo)
-	}
-
-	src := github.NewSource()
-
-	result, err := collector.Collect(cmd.Context(), cfg, s, project, repos, src, func(e collector.ProgressEvent) {
+	result, err := r.Run(cmd.Context(), func(e collector.ProgressEvent) {
 		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), e.Message)
 	})
 	if err != nil {
@@ -71,9 +50,9 @@ func runScan(cmd *cobra.Command, args []string) error {
 	formatter := terminal.New()
 	formatter.UseColor = true
 
-	reports := report.BuildFromResult(*result, cfg)
-	for _, r := range reports {
-		fmt.Println(formatter.Format(r))
+	reports := report.BuildFromResult(*result, r.Config())
+	for _, rpt := range reports {
+		fmt.Println(formatter.Format(rpt))
 	}
 
 	return nil
