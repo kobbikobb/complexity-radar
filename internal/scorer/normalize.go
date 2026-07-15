@@ -6,61 +6,34 @@ import (
 	"github.com/kobbikobb/complexity-radar/internal/model"
 )
 
-const (
-	refSecurityVulnerabilities = 70.0
-	refStalePRs                = 45.0
-	refBuildTime               = 1800.0
-	refK8sDeployments          = 100.0
-	refContainerImages         = 40.0
-	refDeployTargets           = 20.0
-	refDependencyCount         = 8.0   // deps-per-service ratio
-	refDeployFrequency         = 5.0   // weekday deploy = full marks, not CD cadence
-	refCICDComplexity          = 100.0 // CI/CD automation maturity (higher is better); ref matches cicd.go's raw cap of 100
-	refSecurityCritical        = 5.0
-	refSecurityHigh            = 40.0
-	refSecurityMedium          = 60.0
-	refSecurityLow             = 40.0
-	refDecisionDensity         = 20.0
-)
-
-func NormalizeMetric(metricType model.MetricTypeName, value float64) float64 {
-	switch metricType {
-	case model.MetricTypeSecurityVulnerabilities:
-		return asymptotic(value, refSecurityVulnerabilities)
-	case model.MetricTypeStalePRs:
-		return asymptotic(value, refStalePRs)
-	case model.MetricTypeBuildTime:
-		return clamp(100 - (value/refBuildTime)*100)
-	case model.MetricTypeK8sDeployments:
-		return asymptotic(value, refK8sDeployments)
-	case model.MetricTypeContainerImages:
-		return asymptotic(value, refContainerImages)
-	case model.MetricTypeDeployTargets:
-		return asymptotic(value, refDeployTargets)
-	case model.MetricTypeDependencyCount:
-		return asymptotic(value, refDependencyCount)
-	case model.MetricTypeDecisionDensity:
-		return asymptotic(value, refDecisionDensity)
-	case model.MetricTypeDeployFrequency:
-		if value < 0 {
+var normalizers = map[model.MetricTypeName]func(float64) float64{
+	model.MetricTypeSecurityVulnerabilities: func(v float64) float64 { return asymptotic(v, 70) },
+	model.MetricTypeStalePRs:                func(v float64) float64 { return asymptotic(v, 45) },
+	model.MetricTypeBuildTime:               func(v float64) float64 { return clamp(100 - (v/1800)*100) },
+	model.MetricTypeK8sDeployments:          func(v float64) float64 { return asymptotic(v, 100) },
+	model.MetricTypeContainerImages:         func(v float64) float64 { return asymptotic(v, 40) },
+	model.MetricTypeDeployTargets:           func(v float64) float64 { return asymptotic(v, 20) },
+	model.MetricTypeDependencyCount:         func(v float64) float64 { return asymptotic(v, 8) },
+	model.MetricTypeDecisionDensity:         func(v float64) float64 { return asymptotic(v, 20) },
+	model.MetricTypeDeployFrequency: func(v float64) float64 {
+		if v < 0 {
 			return math.NaN()
 		}
-		return clamp((value / refDeployFrequency) * 100)
-	case model.MetricTypeBuildSuccessRatio:
-		return clamp(value * 100)
-	case model.MetricTypeCICDComplexity:
-		return clamp(logNormalize(value, refCICDComplexity) * 100)
-	case model.MetricTypeSecurityCritical:
-		return asymptotic(value, refSecurityCritical)
-	case model.MetricTypeSecurityHigh:
-		return asymptotic(value, refSecurityHigh)
-	case model.MetricTypeSecurityMedium:
-		return asymptotic(value, refSecurityMedium)
-	case model.MetricTypeSecurityLow:
-		return asymptotic(value, refSecurityLow)
-	default:
-		return 0
+		return clamp((v / 5) * 100)
+	},
+	model.MetricTypeBuildSuccessRatio: func(v float64) float64 { return clamp(v * 100) },
+	model.MetricTypeCICDComplexity:    func(v float64) float64 { return clamp(logNormalize(v, 100) * 100) },
+	model.MetricTypeSecurityCritical:  func(v float64) float64 { return asymptotic(v, 5) },
+	model.MetricTypeSecurityHigh:      func(v float64) float64 { return asymptotic(v, 40) },
+	model.MetricTypeSecurityMedium:    func(v float64) float64 { return asymptotic(v, 60) },
+	model.MetricTypeSecurityLow:       func(v float64) float64 { return asymptotic(v, 40) },
+}
+
+func NormalizeMetric(metricType model.MetricTypeName, value float64) float64 {
+	if fn, ok := normalizers[metricType]; ok {
+		return fn(value)
 	}
+	return 0
 }
 
 // asymptotic scores a lower-is-better metric as 100*ref/(value+ref): 100 at 0,
