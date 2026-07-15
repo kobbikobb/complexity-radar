@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/kobbikobb/complexity-radar/internal/report"
+	"github.com/kobbikobb/complexity-radar/internal/runner"
 	"github.com/kobbikobb/complexity-radar/internal/terminal"
 	"github.com/spf13/cobra"
 )
@@ -42,12 +43,12 @@ func runReport(cmd *cobra.Command, args []string) error {
 	}
 	defer func() { _ = s.Close() }()
 
-	project, err := findProject(s, projectName)
+	project, err := runner.FindOrCreateProject(s, projectName)
 	if err != nil {
 		return err
 	}
 
-	cfg, err := buildConfigFromDB(s, project)
+	cfg, err := runner.BuildConfigFromDB(s, project)
 	if err != nil {
 		return err
 	}

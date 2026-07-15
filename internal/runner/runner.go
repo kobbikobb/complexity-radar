@@ -7,42 +7,35 @@ import (
 	"github.com/kobbikobb/complexity-radar/internal/collector"
 	"github.com/kobbikobb/complexity-radar/internal/config"
 	"github.com/kobbikobb/complexity-radar/internal/model"
-	"github.com/kobbikobb/complexity-radar/internal/store"
 )
 
+type Store interface {
+	ListProjects() ([]model.Project, error)
+	GetProjectByName(name string) (*model.Project, error)
+	CreateProject(p *model.Project) error
+	ListRepositories(projectID int64) ([]model.Repository, error)
+	FindOrCreateRepository(projectID int64, url, branch string) (*model.Repository, error)
+	GetMetricTypeByName(name model.MetricTypeName) (*model.MetricType, error)
+	CreateMetric(m *model.Metric) error
+	CreateDimensionScore(ds *model.DimensionScore) error
+	Close() error
+}
+
 type Runner struct {
-	store   *store.Store
+	store   Store
 	project *model.Project
 	cfg     *config.Config
 	repos   []model.Repository
 	source  model.Source
 }
 
-func New(dbPath, projectName string, source model.Source) (*Runner, error) {
-	s, err := store.New(dbPath)
-	if err != nil {
-		return nil, fmt.Errorf("opening database: %w", err)
-	}
-
-	r, err := newFromStore(s, projectName, source)
-	if err != nil {
-		_ = s.Close()
-		return nil, err
-	}
-	return r, nil
-}
-
-func NewFromStore(s *store.Store, projectName string, source model.Source) (*Runner, error) {
-	return newFromStore(s, projectName, source)
-}
-
-func newFromStore(s *store.Store, projectName string, source model.Source) (*Runner, error) {
-	project, err := findOrCreateProject(s, projectName)
+func NewFromStore(s Store, projectName string, source model.Source) (*Runner, error) {
+	project, err := FindOrCreateProject(s, projectName)
 	if err != nil {
 		return nil, err
 	}
 
-	cfg, err := buildConfigFromDB(s, project)
+	cfg, err := BuildConfigFromDB(s, project)
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +74,7 @@ func (r *Runner) Close() error {
 	return r.store.Close()
 }
 
-func findOrCreateProject(s *store.Store, name string) (*model.Project, error) {
+func FindOrCreateProject(s Store, name string) (*model.Project, error) {
 	if name == "" {
 		projects, err := s.ListProjects()
 		if err != nil {
@@ -105,7 +98,7 @@ func findOrCreateProject(s *store.Store, name string) (*model.Project, error) {
 	return p, nil
 }
 
-func buildConfigFromDB(s *store.Store, project *model.Project) (*config.Config, error) {
+func BuildConfigFromDB(s Store, project *model.Project) (*config.Config, error) {
 	repos, err := s.ListRepositories(project.ID)
 	if err != nil {
 		return nil, fmt.Errorf("listing repositories: %w", err)
@@ -137,7 +130,7 @@ func buildConfigFromDB(s *store.Store, project *model.Project) (*config.Config, 
 	return cfg, nil
 }
 
-func resolveRepos(s *store.Store, project *model.Project, cfg *config.Config) ([]model.Repository, error) {
+func resolveRepos(s Store, project *model.Project, cfg *config.Config) ([]model.Repository, error) {
 	var repos []model.Repository
 	for _, repoCfg := range cfg.Repositories {
 		repo, err := s.FindOrCreateRepository(project.ID, repoCfg.URL, repoCfg.Branch)

@@ -7,6 +7,7 @@ import (
 
 	"github.com/kobbikobb/complexity-radar/internal/config"
 	"github.com/kobbikobb/complexity-radar/internal/model"
+	"github.com/kobbikobb/complexity-radar/internal/runner"
 	"github.com/kobbikobb/complexity-radar/internal/store"
 )
 
@@ -114,7 +115,7 @@ func TestBuildConfigFromDB(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cfg, err := buildConfigFromDB(s, project)
+	cfg, err := runner.BuildConfigFromDB(s, project)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,7 +155,7 @@ func TestBuildConfigFromDBNoRepos(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = buildConfigFromDB(s, project)
+	_, err = runner.BuildConfigFromDB(s, project)
 	if err == nil {
 		t.Fatal("expected error for no repositories")
 	}
@@ -182,64 +183,6 @@ func TestIsValidRepoURL(t *testing.T) {
 	}
 }
 
-func TestFindProjectByName(t *testing.T) {
-	s, err := store.New(":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = s.Close() }()
-
-	p1 := &model.Project{Name: "project-a"}
-	if err := s.CreateProject(p1); err != nil {
-		t.Fatal(err)
-	}
-
-	p2 := &model.Project{Name: "project-b"}
-	if err := s.CreateProject(p2); err != nil {
-		t.Fatal(err)
-	}
-
-	got, err := findProject(s, "project-b")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if got.Name != "project-b" {
-		t.Errorf("expected project 'project-b', got %q", got.Name)
-	}
-}
-
-func TestFindProjectNotFound(t *testing.T) {
-	s, err := store.New(":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = s.Close() }()
-
-	p := &model.Project{Name: "existing"}
-	if err := s.CreateProject(p); err != nil {
-		t.Fatal(err)
-	}
-
-	_, err = findProject(s, "nonexistent")
-	if err == nil {
-		t.Fatal("expected error for nonexistent project")
-	}
-}
-
-func TestFindProjectNoProjects(t *testing.T) {
-	s, err := store.New(":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = s.Close() }()
-
-	_, err = findProject(s, "")
-	if err == nil {
-		t.Fatal("expected error for no projects")
-	}
-}
-
 func TestFindOrCreateProjectCreatesNew(t *testing.T) {
 	s, err := store.New(":memory:")
 	if err != nil {
@@ -247,16 +190,13 @@ func TestFindOrCreateProjectCreatesNew(t *testing.T) {
 	}
 	defer func() { _ = s.Close() }()
 
-	p, err := findOrCreateProject(s, "new-project", "A new project")
+	p, err := runner.FindOrCreateProject(s, "new-project")
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	if p.Name != "new-project" {
 		t.Errorf("expected project name 'new-project', got %q", p.Name)
-	}
-	if p.Description != "A new project" {
-		t.Errorf("expected description 'A new project', got %q", p.Description)
 	}
 	if p.ID == 0 {
 		t.Error("expected non-zero project ID")
@@ -275,7 +215,7 @@ func TestFindOrCreateProjectReturnsExisting(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p, err := findOrCreateProject(s, "existing-project", "updated description")
+	p, err := runner.FindOrCreateProject(s, "existing-project")
 	if err != nil {
 		t.Fatal(err)
 	}
