@@ -13,3 +13,22 @@ func TestEveryMetricTypeShouldHaveMethodology(t *testing.T) {
 		}
 	}
 }
+
+func has(types []MetricType, name MetricTypeName) bool {
+	for _, mt := range types {
+		if mt.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+func TestDependencyTotalIsDisplayOnly(t *testing.T) {
+	// Act & Assert
+	if has(MetricTypes(), MetricTypeDependencyTotal) {
+		t.Error("dependency_total should not be a scored metric type")
+	}
+	if !has(DisplayMetricTypes(), MetricTypeDependencyTotal) {
+		t.Error("dependency_total should be a display metric type")
+	}
+}

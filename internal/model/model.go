@@ -48,11 +48,12 @@ const (
 	MetricTypeDeployTargets           MetricTypeName = "deploy_targets"
 	MetricTypeCICDComplexity          MetricTypeName = "ci_cd_complexity"
 	MetricTypeDependencyCount         MetricTypeName = "dependency_count"
+	MetricTypeDependencyTotal         MetricTypeName = "dependency_total"
 	MetricTypeSecurityCritical        MetricTypeName = "security_critical"
 	MetricTypeSecurityHigh            MetricTypeName = "security_high"
 	MetricTypeSecurityMedium          MetricTypeName = "security_medium"
 	MetricTypeSecurityLow             MetricTypeName = "security_low"
-	MetricTypeCyclomaticP95           MetricTypeName = "cyclomatic_p95"
+	MetricTypeDecisionDensity         MetricTypeName = "decision_density"
 )
 
 type MetricType struct {
@@ -105,13 +106,13 @@ func MetricTypes() []MetricType {
 			ScoreDef: "log: logNorm(value,100)*100; higher better (automation maturity)",
 			Source:   "Git tree + workflow contents"},
 		{Name: MetricTypeDependencyCount, Dimension: DimensionCode, Unit: "count",
-			RawDef:   "distinct third-party deps summed across stacks (npm/go/maven/python/nuget/cargo/ruby); vendored dirs excluded",
-			ScoreDef: "log: 100 - logNorm(value,1500)*100; lower better",
+			RawDef:   "deps per service: distinct third-party deps (npm/go/maven/python/nuget/cargo/ruby) ÷ distinct services (manifest dirs); vendored dirs excluded",
+			ScoreDef: "log: 100 - logNorm(value,20)*100; lower better",
 			Source:   "Git tree + manifest files"},
-		{Name: MetricTypeCyclomaticP95, Dimension: DimensionCode, Unit: "complexity",
-			RawDef:   "per-service p95 of an approximate per-file decision-point count (1 + if/elif/for/while/case/catch/&&/||/? tokens), rolled up as mean of per-service p95; size-biased sample, capped ~400 file reads; vendored dirs excluded; -1=no source",
-			ScoreDef: "log: 100 - logNorm(value,80)*100; lower better",
-			Source:   "Git tree + sampled file contents (regex approximation, NOT AST cyclomatic; counts tokens in comments/strings; file-level not per-function)"},
+		{Name: MetricTypeDecisionDensity, Dimension: DimensionCode, Unit: "per100loc",
+			RawDef:   "per-service p95 of per-file decision density (decision tokens per 100 non-blank lines: (1 + if/elif/for/while/case/catch/&&/||/? tokens) ÷ non-blank lines ×100), rolled up as mean of per-service p95; size-biased sample, capped ~400 file reads; vendored/generated dirs excluded; -1=no source",
+			ScoreDef: "log: 100 - logNorm(value,15)*100; lower better",
+			Source:   "Git tree + sampled file contents (regex approximation, NOT AST cyclomatic; counts tokens in comments/strings)"},
 	}
 }
 
@@ -128,6 +129,8 @@ func DisplayMetricTypes() []MetricType {
 			RawDef: "count of OPEN medium-severity Dependabot alerts", ScoreDef: "display-only (not scored)", Source: "Dependabot alerts API"},
 		{Name: MetricTypeSecurityLow, Dimension: DimensionSecurity, Unit: "count",
 			RawDef: "count of OPEN low-severity Dependabot alerts", ScoreDef: "display-only (not scored)", Source: "Dependabot alerts API"},
+		{Name: MetricTypeDependencyTotal, Dimension: DimensionCode, Unit: "count",
+			RawDef: "raw distinct third-party deps summed across stacks (npm/go/maven/python/nuget/cargo/ruby); vendored dirs excluded", ScoreDef: "display-only (not scored)", Source: "Git tree + manifest files"},
 	}
 }
 

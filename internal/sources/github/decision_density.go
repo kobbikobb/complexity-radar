@@ -30,6 +30,16 @@ func complexity(fileText string) int {
 	return 1 + len(controlFlowRe.FindAllStringIndex(fileText, -1))
 }
 
+func nonBlankLineCount(fileText string) int {
+	n := 0
+	for _, line := range strings.Split(fileText, "\n") {
+		if strings.TrimSpace(line) != "" {
+			n++
+		}
+	}
+	return n
+}
+
 // percentile returns the q-quantile (0..1) of an ascending-sorted slice via linear interpolation.
 func percentile(sorted []float64, q float64) float64 {
 	switch len(sorted) {
@@ -48,7 +58,7 @@ func percentile(sorted []float64, q float64) float64 {
 	return sorted[lo]*(1-frac) + sorted[hi]*frac
 }
 
-func collectCyclomaticP95(ctx context.Context, client APIClient, owner, name, branch string, tree *GitTree) []model.SourceMetric {
+func collectDecisionDensity(ctx context.Context, client APIClient, owner, name, branch string, tree *GitTree) []model.SourceMetric {
 	manifestDirs := map[string]bool{}
 	for _, e := range tree.Tree {
 		if e.Type == "blob" {
@@ -68,7 +78,7 @@ func collectCyclomaticP95(ctx context.Context, client APIClient, owner, name, br
 	}
 
 	if len(services) == 0 {
-		return []model.SourceMetric{{Type: model.MetricTypeCyclomaticP95, Value: noDataValue}}
+		return []model.SourceMetric{{Type: model.MetricTypeDecisionDensity, Value: noDataValue}}
 	}
 
 	keys := make([]string, 0, len(services))
@@ -106,7 +116,8 @@ func collectCyclomaticP95(ctx context.Context, client APIClient, owner, name, br
 			if longestLineLen(content) > 5000 {
 				continue
 			}
-			values[k] = append(values[k], float64(complexity(content)))
+			density := float64(complexity(content)) / float64(max(1, nonBlankLineCount(content))) * 100
+			values[k] = append(values[k], density)
 		}
 		if !anyLeft {
 			break
@@ -132,7 +143,7 @@ func collectCyclomaticP95(ctx context.Context, client APIClient, owner, name, br
 	}
 
 	if len(services95) == 0 {
-		return []model.SourceMetric{{Type: model.MetricTypeCyclomaticP95, Value: noDataValue}}
+		return []model.SourceMetric{{Type: model.MetricTypeDecisionDensity, Value: noDataValue}}
 	}
 
 	sum := 0.0
@@ -150,9 +161,9 @@ func collectCyclomaticP95(ctx context.Context, client APIClient, owner, name, br
 	for i, s := range top {
 		parts[i] = fmt.Sprintf("%s=%.0f", s.label, s.p95)
 	}
-	log.Printf("cyclomatic p95: mean=%.1f across %d services; worst: %s", mean, len(services95), strings.Join(parts, " "))
+	log.Printf("decision density: mean=%.1f across %d services; worst: %s", mean, len(services95), strings.Join(parts, " "))
 
-	return []model.SourceMetric{{Type: model.MetricTypeCyclomaticP95, Value: mean}}
+	return []model.SourceMetric{{Type: model.MetricTypeDecisionDensity, Value: mean}}
 }
 
 // isGenerated reports whether a path is a generated or build artifact whose token count isn't hand-written complexity.
