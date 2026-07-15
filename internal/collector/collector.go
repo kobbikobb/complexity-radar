@@ -8,8 +8,13 @@ import (
 	"github.com/kobbikobb/complexity-radar/internal/config"
 	"github.com/kobbikobb/complexity-radar/internal/model"
 	"github.com/kobbikobb/complexity-radar/internal/scorer"
-	"github.com/kobbikobb/complexity-radar/internal/store"
 )
+
+type MetricStore interface {
+	GetMetricTypeByName(name model.MetricTypeName) (*model.MetricType, error)
+	CreateMetric(m *model.Metric) error
+	CreateDimensionScore(ds *model.DimensionScore) error
+}
 
 type RepositoryResult struct {
 	Repository   model.Repository
@@ -42,7 +47,7 @@ type ProgressFunc func(ProgressEvent)
 // noopProgress does nothing when no progress function is provided.
 func noopProgress(ProgressEvent) {}
 
-func Collect(ctx context.Context, cfg *config.Config, s *store.Store, project *model.Project, repos []model.Repository, src model.Source, onProgress ProgressFunc) (*CollectionResult, error) {
+func Collect(ctx context.Context, cfg *config.Config, s MetricStore, project *model.Project, repos []model.Repository, src model.Source, onProgress ProgressFunc) (*CollectionResult, error) {
 	if onProgress == nil {
 		onProgress = noopProgress
 	}

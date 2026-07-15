@@ -2,11 +2,12 @@ package collector
 
 import (
 	"context"
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/kobbikobb/complexity-radar/internal/config"
 	"github.com/kobbikobb/complexity-radar/internal/model"
-	"github.com/kobbikobb/complexity-radar/internal/store"
 )
 
 type mockSource struct {
@@ -29,12 +30,52 @@ func (m *mockSource) SupportedMetrics() []model.MetricTypeName {
 	}
 }
 
-func TestCollect(t *testing.T) {
-	s, err := store.New(":memory:")
-	if err != nil {
-		t.Fatal(err)
+type fakeMetricStore struct {
+	metricTypes     map[model.MetricTypeName]*model.MetricType
+	metrics         []model.Metric
+	dimensionScores []model.DimensionScore
+	nextMetricID    int64
+	nextDSID        int64
+}
+
+func newFakeMetricStore() *fakeMetricStore {
+	types := make(map[model.MetricTypeName]*model.MetricType)
+	for _, mt := range model.MetricTypes() {
+		mt := mt
+		types[mt.Name] = &mt
 	}
-	defer func() { _ = s.Close() }()
+	for _, mt := range model.DisplayMetricTypes() {
+		mt := mt
+		types[mt.Name] = &mt
+	}
+	return &fakeMetricStore{metricTypes: types}
+}
+
+func (f *fakeMetricStore) GetMetricTypeByName(name model.MetricTypeName) (*model.MetricType, error) {
+	mt, ok := f.metricTypes[name]
+	if !ok {
+		return nil, fmt.Errorf("metric type %q not found", name)
+	}
+	return mt, nil
+}
+
+func (f *fakeMetricStore) CreateMetric(m *model.Metric) error {
+	f.nextMetricID++
+	m.ID = f.nextMetricID
+	m.CollectedAt = time.Now().UTC()
+	f.metrics = append(f.metrics, *m)
+	return nil
+}
+
+func (f *fakeMetricStore) CreateDimensionScore(ds *model.DimensionScore) error {
+	f.nextDSID++
+	ds.ID = f.nextDSID
+	f.dimensionScores = append(f.dimensionScores, *ds)
+	return nil
+}
+
+func TestCollect(t *testing.T) {
+	s := newFakeMetricStore()
 
 	cfg := &config.Config{
 		Project: config.ProjectConfig{
@@ -57,14 +98,7 @@ func TestCollect(t *testing.T) {
 	}
 
 	project := &model.Project{Name: "test-project", Description: "A test project"}
-	if err := s.CreateProject(project); err != nil {
-		t.Fatal(err)
-	}
-
 	repo := model.Repository{ProjectID: project.ID, URL: "github.com/org/repo", Branch: "main"}
-	if err := s.CreateRepository(&repo); err != nil {
-		t.Fatal(err)
-	}
 
 	result, err := Collect(context.Background(), cfg, s, project, []model.Repository{repo}, src, nil)
 	if err != nil {
@@ -95,14 +129,18 @@ func TestCollect(t *testing.T) {
 	if len(repoResult.Dimensions) == 0 {
 		t.Error("expected dimension scores")
 	}
+
+	if len(s.metrics) != 4 {
+		t.Errorf("expected 4 stored metrics, got %d", len(s.metrics))
+	}
+
+	if len(s.dimensionScores) == 0 {
+		t.Error("expected stored dimension scores")
+	}
 }
 
 func TestCollectWithMultipleRepos(t *testing.T) {
-	s, err := store.New(":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = s.Close() }()
+	s := newFakeMetricStore()
 
 	cfg := &config.Config{
 		Project: config.ProjectConfig{
@@ -122,18 +160,8 @@ func TestCollectWithMultipleRepos(t *testing.T) {
 	}
 
 	project := &model.Project{Name: "multi-repo-project"}
-	if err := s.CreateProject(project); err != nil {
-		t.Fatal(err)
-	}
-
 	repo1 := model.Repository{ProjectID: project.ID, URL: "github.com/org/repo1", Branch: "main"}
-	if err := s.CreateRepository(&repo1); err != nil {
-		t.Fatal(err)
-	}
 	repo2 := model.Repository{ProjectID: project.ID, URL: "github.com/org/repo2", Branch: "develop"}
-	if err := s.CreateRepository(&repo2); err != nil {
-		t.Fatal(err)
-	}
 
 	result, err := Collect(context.Background(), cfg, s, project, []model.Repository{repo1, repo2}, src, nil)
 	if err != nil {
@@ -143,14 +171,14 @@ func TestCollectWithMultipleRepos(t *testing.T) {
 	if len(result.Repositories) != 2 {
 		t.Fatalf("expected 2 repositories, got %d", len(result.Repositories))
 	}
+
+	if len(s.metrics) != 2 {
+		t.Errorf("expected 2 stored metrics, got %d", len(s.metrics))
+	}
 }
 
 func TestCollectWithSourceError(t *testing.T) {
-	s, err := store.New(":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = s.Close() }()
+	s := newFakeMetricStore()
 
 	cfg := &config.Config{
 		Project: config.ProjectConfig{
@@ -167,14 +195,7 @@ func TestCollectWithSourceError(t *testing.T) {
 	}
 
 	project := &model.Project{Name: "error-project"}
-	if err := s.CreateProject(project); err != nil {
-		t.Fatal(err)
-	}
-
 	repo := model.Repository{ProjectID: project.ID, URL: "github.com/org/repo", Branch: "main"}
-	if err := s.CreateRepository(&repo); err != nil {
-		t.Fatal(err)
-	}
 
 	result, err := Collect(context.Background(), cfg, s, project, []model.Repository{repo}, src, nil)
 	if err != nil {
@@ -188,5 +209,9 @@ func TestCollectWithSourceError(t *testing.T) {
 	repoResult := result.Repositories[0]
 	if len(repoResult.Errors) == 0 {
 		t.Error("expected errors from failed collection")
+	}
+
+	if len(s.metrics) != 0 {
+		t.Errorf("expected 0 stored metrics on error, got %d", len(s.metrics))
 	}
 }
