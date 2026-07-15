@@ -13,8 +13,8 @@ const (
 	refK8sDeployments          = 200.0
 	refContainerImages         = 200.0
 	refDeployTargets           = 50.0
-	refDependencyCount         = 500.0
-	refDeployFrequency         = 5.0 // weekday deploy = full marks, not CD cadence
+	refDependencyCount         = 1500.0 // total distinct third-party deps (sum across stacks) at which the score bottoms out
+	refDeployFrequency         = 5.0    // weekday deploy = full marks, not CD cadence
 	refCICDComplexity          = 500.0
 	refSecurityCritical        = 5.0
 	refSecurityHigh            = 10.0
