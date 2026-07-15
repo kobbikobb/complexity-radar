@@ -17,8 +17,12 @@ const maxAlertPages = 10
 
 // Vulnerability represents a Dependabot alert from the GitHub API.
 type Vulnerability struct {
-	State                 string `json:"state"`
-	Severity              string `json:"severity"`
+	State            string `json:"state"`
+	Severity         string `json:"severity"`
+	SecurityAdvisory *struct {
+		GhsaID   string `json:"ghsa_id"`
+		Severity string `json:"severity"`
+	} `json:"security_advisory"`
 	SecurityVulnerability *struct {
 		Severity string `json:"severity"`
 	} `json:"security_vulnerability"`
@@ -60,28 +64,53 @@ func (s *Source) collectSecurityVulnerabilities(ctx context.Context, owner, name
 		return nil, fmt.Errorf("parsing dependabot alerts: %w", err)
 	}
 
-	total := 0
+	// Dedup by advisory: the same CVE fires one alert per manifest it appears in.
+	type advisory struct {
+		severity   string
+		anyRuntime bool // runtime if any occurrence is runtime; dev-scoped only if all are
+	}
+	distinct := map[string]*advisory{}
+	for i, a := range alerts {
+		if a.State != "open" {
+			continue
+		}
+
+		sev := ""
+		key := ""
+		if a.SecurityAdvisory != nil {
+			sev = a.SecurityAdvisory.Severity
+			key = a.SecurityAdvisory.GhsaID
+		}
+		if sev == "" && a.SecurityVulnerability != nil {
+			sev = a.SecurityVulnerability.Severity
+		}
+		if sev == "" {
+			sev = a.Severity
+		}
+		if key == "" {
+			key = fmt.Sprintf("idx-%d", i)
+		}
+		runtime := a.Dependency == nil || a.Dependency.Scope != "development"
+
+		if adv, ok := distinct[key]; ok {
+			adv.anyRuntime = adv.anyRuntime || runtime
+		} else {
+			distinct[key] = &advisory{severity: sev, anyRuntime: runtime}
+		}
+	}
+
 	weightedSum := 0.0
 	critCount := 0
 	highCount := 0
 	medCount := 0
 	lowCount := 0
-	for _, a := range alerts {
-		if a.State != "open" {
-			continue
-		}
-		total++
-
-		sev := a.Severity
-		if a.SecurityVulnerability != nil && a.SecurityVulnerability.Severity != "" {
-			sev = a.SecurityVulnerability.Severity
-		}
-		w := severityWeight(sev)
-		if a.Dependency != nil && a.Dependency.Scope == "development" {
+	for _, adv := range distinct {
+		w := severityWeight(adv.severity)
+		if !adv.anyRuntime {
 			w *= devScopeWeight
 		}
 		weightedSum += w
-		switch sev {
+		switch adv.severity {
 		case "critical":
 			critCount++
 		case "high":
