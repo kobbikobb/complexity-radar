@@ -99,9 +99,18 @@ func SecurityBreakdown(metrics map[model.MetricTypeName]float64) string {
 }
 
 type TerminalFormatter struct {
-	UseColor  bool
-	ShowTrend bool
+	UseColor    bool
+	ShowTrend   bool
+	ShowExplain bool
 }
+
+var methodology = func() map[model.MetricTypeName]model.MetricType {
+	m := map[model.MetricTypeName]model.MetricType{}
+	for _, mt := range append(model.MetricTypes(), model.DisplayMetricTypes()...) {
+		m[mt.Name] = mt
+	}
+	return m
+}()
 
 func formatDelta(v float64) string {
 	switch {
@@ -181,6 +190,18 @@ func (f *TerminalFormatter) Format(report Report) string {
 	}
 	b.WriteString(tableBorder(metWidths, "└", "┴", "┘"))
 	b.WriteString("\n")
+
+	if f.ShowExplain {
+		b.WriteString("  Methodology:\n")
+		for _, m := range report.Metrics {
+			mt := methodology[m.Name]
+			fmt.Fprintf(&b, "  %s\n", formatMetricName(m.Name))
+			fmt.Fprintf(&b, "    Raw:    %s\n", mt.RawDef)
+			fmt.Fprintf(&b, "    Score:  %s\n", mt.ScoreDef)
+			fmt.Fprintf(&b, "    Source: %s\n", mt.Source)
+		}
+		b.WriteString("\n")
+	}
 
 	if len(report.Errors) > 0 {
 		b.WriteString("  ⚠ Errors:\n")

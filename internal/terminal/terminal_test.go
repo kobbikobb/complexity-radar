@@ -132,6 +132,37 @@ func TestFormatHidesTrendWhenDisabled(t *testing.T) {
 	}
 }
 
+func TestFormatShouldShowMethodologyWhenExplainEnabled(t *testing.T) {
+	f := New()
+	f.UseColor = false
+	f.ShowExplain = true
+
+	out := f.Format(sampleReport())
+
+	bt := methodology[model.MetricTypeBuildTime]
+	if !strings.Contains(out, "Methodology:") {
+		t.Errorf("expected methodology section, got:\n%s", out)
+	}
+	if !strings.Contains(out, bt.RawDef) || !strings.Contains(out, bt.ScoreDef) || !strings.Contains(out, bt.Source) {
+		t.Errorf("expected build_time raw/score/source in output, got:\n%s", out)
+	}
+}
+
+func TestFormatShouldHideMethodologyWhenExplainDisabled(t *testing.T) {
+	f := New()
+	f.UseColor = false
+	f.ShowExplain = false
+
+	out := f.Format(sampleReport())
+
+	if strings.Contains(out, "Methodology:") {
+		t.Errorf("methodology shown without --explain, got:\n%s", out)
+	}
+	if strings.Contains(out, methodology[model.MetricTypeBuildTime].ScoreDef) {
+		t.Errorf("scoring definition shown without --explain, got:\n%s", out)
+	}
+}
+
 func TestFormatShouldIncludeScoreLegend(t *testing.T) {
 	f := New()
 	f.UseColor = false
