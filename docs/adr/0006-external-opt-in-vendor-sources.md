@@ -22,10 +22,12 @@ project-scoped metric even though every metric so far has been repo-scoped.
   project sources — each the single place its kind of vendor is registered.
 - **Self-skipping, opt-in.** A vendor source is always registered but returns
   `(nil, nil)` when unconfigured, so opt-in is a graceful no-op, never an error.
-- **Project-scoped config in the DB; secrets in env.** The DevCycle project key is
-  a `projects` column set by the init wizard. Credentials (`DEVCYCLE_CLIENT_ID` /
-  `DEVCYCLE_CLIENT_SECRET`) come from the environment, never the DB — matching the
-  existing `gh`-CLI auth idiom.
+- **Project-scoped config and credentials in the DB.** The DevCycle project key,
+  client ID, and client secret are `projects` columns set by the init wizard. The
+  local SQLite DB (`*.db`, gitignored) is the single place a user configures a
+  project, so credentials live there too rather than in the environment. Tradeoff:
+  the client secret is stored plaintext at rest; the DB file is gitignored and
+  should be kept out of shared/backed-up locations.
 - **Project-level scoring via a rollup report.** Project metrics are stored in a
   `project_metrics` table. The report layer builds a project rollup: each repo
   metric is averaged across repos (skipping no-data sentinels) and project metrics
