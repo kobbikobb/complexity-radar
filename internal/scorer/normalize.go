@@ -20,6 +20,7 @@ const (
 	refSecurityHigh            = 10.0
 	refSecurityMedium          = 20.0
 	refSecurityLow             = 30.0
+	refCyclomaticP95           = 80.0 // placeholder; file-level values run high, needs calibration against a real repo run
 )
 
 func NormalizeMetric(metricType model.MetricTypeName, value float64) float64 {
@@ -38,11 +39,11 @@ func NormalizeMetric(metricType model.MetricTypeName, value float64) float64 {
 		return clamp(100 - logNormalize(value, refDeployTargets)*100)
 	case model.MetricTypeDependencyCount:
 		return clamp(100 - logNormalize(value, refDependencyCount)*100)
-	case model.MetricTypeLargeFileRatio:
+	case model.MetricTypeCyclomaticP95:
 		if value < 0 {
 			return math.NaN()
 		}
-		return clamp(100 - value*100)
+		return clamp(100 - logNormalize(value, refCyclomaticP95)*100)
 	case model.MetricTypeDeployFrequency:
 		if value < 0 {
 			return math.NaN()

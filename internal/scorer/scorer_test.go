@@ -115,14 +115,17 @@ func TestNormalizeMetricClamped(t *testing.T) {
 	}
 }
 
-func TestNormalizeMetricLargeFileRatio(t *testing.T) {
-	if got := NormalizeMetric(model.MetricTypeLargeFileRatio, 0.0); !approxEqual(got, 100) {
-		t.Errorf("ratio 0.0 = %v, want 100", got)
+func TestNormalizeMetricCyclomaticP95(t *testing.T) {
+	low := NormalizeMetric(model.MetricTypeCyclomaticP95, 10)
+	high := NormalizeMetric(model.MetricTypeCyclomaticP95, 200)
+
+	if low <= high {
+		t.Errorf("expected higher complexity to score lower: low(10)=%v high(200)=%v", low, high)
 	}
-	if got := NormalizeMetric(model.MetricTypeLargeFileRatio, 1.0); !approxEqual(got, 0) {
-		t.Errorf("ratio 1.0 = %v, want 0", got)
+	if got := NormalizeMetric(model.MetricTypeCyclomaticP95, 0); !approxEqual(got, 100) {
+		t.Errorf("value 0 = %v, want 100", got)
 	}
-	if got := NormalizeMetric(model.MetricTypeLargeFileRatio, -1.0); !math.IsNaN(got) {
+	if got := NormalizeMetric(model.MetricTypeCyclomaticP95, -1.0); !math.IsNaN(got) {
 		t.Errorf("no-data = %v, want NaN", got)
 	}
 }
@@ -242,7 +245,7 @@ func TestScoreDimensionsAllDimensions(t *testing.T) {
 func TestScoreDimensionsCode(t *testing.T) {
 	metrics := map[model.MetricTypeName]float64{
 		model.MetricTypeDependencyCount: 0, // 100
-		model.MetricTypeLargeFileRatio:  0, // 100
+		model.MetricTypeCyclomaticP95:   0, // 100
 	}
 	results := ScoreDimensions(metrics)
 
@@ -259,7 +262,7 @@ func TestScoreDimensionsCode(t *testing.T) {
 		t.Errorf("code score = %v, want 100", code.Score)
 	}
 	if code.MetricCount != 2 {
-		t.Errorf("code metric count = %d, want 2 (dependency_count + large_file_ratio)", code.MetricCount)
+		t.Errorf("code metric count = %d, want 2 (dependency_count + cyclomatic_p95)", code.MetricCount)
 	}
 }
 

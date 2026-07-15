@@ -53,7 +53,7 @@ func (s *Source) SupportedMetrics() []model.MetricTypeName {
 		model.MetricTypeDeployFrequency,
 		model.MetricTypeStalePRs,
 		model.MetricTypeDependencyCount,
-		model.MetricTypeLargeFileRatio,
+		model.MetricTypeCyclomaticP95,
 		model.MetricTypeK8sDeployments,
 		model.MetricTypeContainerImages,
 		model.MetricTypeDeployTargets,
@@ -113,7 +113,7 @@ func (s *Source) Collect(ctx context.Context, repo model.Repository) ([]model.So
 	}
 	metrics = append(metrics, m...)
 
-	metrics = append(metrics, collectLargeFileRatio(tree)...)
+	metrics = append(metrics, collectCyclomaticP95(ctx, s.client, owner, name, branch, tree)...)
 
 	metrics = append(metrics, collectK8sDeployments(tree)...)
 	metrics = append(metrics, collectContainerImages(ctx, s.client, owner, name, branch, tree)...)

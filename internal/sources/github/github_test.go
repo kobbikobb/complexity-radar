@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -17,6 +18,7 @@ type mockClient struct {
 	responses    map[string]json.RawMessage
 	errors       map[string]error
 	fileContents map[string]string
+	fileReads    []string
 }
 
 func (m *mockClient) Get(_ context.Context, endpoint string) (json.RawMessage, error) {
@@ -50,6 +52,7 @@ func (m *mockClient) GetPaginated(_ context.Context, endpoint string, _ map[stri
 }
 
 func (m *mockClient) GetFileContent(_ context.Context, _, _, path, _ string) (string, error) {
+	m.fileReads = append(m.fileReads, path)
 	if content, ok := m.fileContents[path]; ok {
 		return content, nil
 	}
@@ -85,23 +88,6 @@ func makeTreeJSON(paths []string) json.RawMessage {
 	var tree []entry
 	for _, p := range paths {
 		tree = append(tree, entry{Path: p, Size: 100, Type: "blob"})
-	}
-	data, _ := json.Marshal(struct {
-		Tree []entry `json:"tree"`
-	}{Tree: tree})
-	return data
-}
-
-// makeSizedTreeJSON creates a JSON git tree of blobs with the given sizes.
-func makeSizedTreeJSON(sizes []int64) json.RawMessage {
-	type entry struct {
-		Path string `json:"path"`
-		Size int64  `json:"size"`
-		Type string `json:"type"`
-	}
-	var tree []entry
-	for i, s := range sizes {
-		tree = append(tree, entry{Path: fmt.Sprintf("f%d.go", i), Size: s, Type: "blob"})
 	}
 	data, _ := json.Marshal(struct {
 		Tree []entry `json:"tree"`
@@ -389,7 +375,7 @@ func TestSupportedMetrics(t *testing.T) {
 		model.MetricTypeDeployFrequency,
 		model.MetricTypeStalePRs,
 		model.MetricTypeDependencyCount,
-		model.MetricTypeLargeFileRatio,
+		model.MetricTypeCyclomaticP95,
 		model.MetricTypeK8sDeployments,
 		model.MetricTypeContainerImages,
 		model.MetricTypeDeployTargets,
@@ -646,32 +632,180 @@ func TestCollectK8sDeployments(t *testing.T) {
 	}
 }
 
-func TestCollectLargeFileRatio(t *testing.T) {
-	responses := defaultResponses()
-	responses["/repos/org/repo/git/trees/main"] = makeSizedTreeJSON([]int64{30000, 100, 100, 100})
-
-	client := &mockClient{responses: responses}
-	src := NewSourceWithClient(client)
-	repo := model.Repository{URL: "github.com/org/repo", Branch: "main"}
-
-	metrics, err := src.Collect(context.Background(), repo)
-	if err != nil {
-		t.Fatalf("Collect: %v", err)
+func TestComplexity(t *testing.T) {
+	tests := []struct {
+		name string
+		code string
+		want int
+	}{
+		{"empty is base 1", "", 1},
+		{"python if/elif/for/except", "if a:\n    pass\nelif b:\n    pass\nfor x in y:\n    pass\nexcept E:\n    pass", 5},
+		{"go if/for/case/&&/||", "if a && b {\n}\nfor {\n}\nswitch {\ncase 1:\n}\nif c || d {\n}", 7},
+		{"ts ternary and nullish", "const x = a ? b : c;\nconst y = a ?? b;\nif (p) {}", 5},
+		{"ruby when/while", "case x\nwhen 1\nend\nwhile y\nend", 4},
+		{"word boundary: notify does not count if", "notify(user)\nverify(x)\nclassifier()", 1},
 	}
 
-	m, ok := findMetric(metrics, model.MetricTypeLargeFileRatio)
-	if !ok {
-		t.Fatal("missing large_file_ratio metric")
-	}
-	// 1 of 4 blobs over largeFileBytes
-	if m.Value != 0.25 {
-		t.Errorf("large file ratio = %v, want 0.25", m.Value)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := complexity(tt.code)
+
+			if got != tt.want {
+				t.Errorf("complexity(%q) = %d, want %d", tt.code, got, tt.want)
+			}
+		})
 	}
 }
 
-func TestCollectLargeFileRatioNoBlobs(t *testing.T) {
+func TestPercentile(t *testing.T) {
+	tests := []struct {
+		name   string
+		sorted []float64
+		q      float64
+		want   float64
+	}{
+		{"empty", nil, 0.95, 0},
+		{"single", []float64{7}, 0.95, 7},
+		{"two p95 interpolates toward top", []float64{2, 10}, 0.95, 9.6},
+		{"median of odd", []float64{1, 2, 3}, 0.5, 2},
+		{"p95 of ten", []float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, 0.95, 9.55},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := percentile(tt.sorted, tt.q)
+
+			if math.Abs(got-tt.want) > 1e-9 {
+				t.Errorf("percentile(%v, %v) = %v, want %v", tt.sorted, tt.q, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestServiceKey(t *testing.T) {
+	manifestDirs := map[string]bool{"services/api": true, ".": true}
+
+	tests := []struct {
+		path string
+		want string
+	}{
+		{"services/api/handler.go", "services/api"},
+		{"services/api/internal/db/store.go", "services/api"},
+		{"main.go", "."},
+		{"scripts/tool.py", "."},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.path, func(t *testing.T) {
+			got := serviceKey(tt.path, manifestDirs)
+
+			if got != tt.want {
+				t.Errorf("serviceKey(%q) = %q, want %q", tt.path, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestServiceKeyNoManifestIsRootBucket(t *testing.T) {
+	got := serviceKey("a/b/c.go", map[string]bool{})
+
+	if got != "" {
+		t.Errorf("serviceKey with no manifest dirs = %q, want \"\"", got)
+	}
+}
+
+func TestCollectCyclomaticP95CapsReadsLargestFirst(t *testing.T) {
+	// Arrange
+	const candidates = maxComplexityFileReads + 50
+	paths := make([]string, candidates)
+	contents := map[string]string{}
+	type entry struct {
+		Path string `json:"path"`
+		Size int64  `json:"size"`
+		Type string `json:"type"`
+	}
+	var tree []entry
+	for i := 0; i < candidates; i++ {
+		p := fmt.Sprintf("f%04d.go", i)
+		paths[i] = p
+		contents[p] = "package p"
+		tree = append(tree, entry{Path: p, Size: int64(i), Type: "blob"})
+	}
+	treeJSON, _ := json.Marshal(struct {
+		Tree []entry `json:"tree"`
+	}{Tree: tree})
+
 	responses := defaultResponses()
-	responses["/repos/org/repo/git/trees/main"] = makeTreeJSON(nil)
+	responses["/repos/org/repo/git/trees/main"] = treeJSON
+	client := &mockClient{responses: responses, fileContents: contents}
+	src := NewSourceWithClient(client)
+	repo := model.Repository{URL: "github.com/org/repo", Branch: "main"}
+
+	// Act
+	_, err := src.Collect(context.Background(), repo)
+	if err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	// Assert
+	var goReads []string
+	for _, p := range client.fileReads {
+		if strings.HasSuffix(p, ".go") {
+			goReads = append(goReads, p)
+		}
+	}
+	if len(goReads) != maxComplexityFileReads {
+		t.Fatalf("candidate file reads = %d, want %d", len(goReads), maxComplexityFileReads)
+	}
+	if goReads[0] != fmt.Sprintf("f%04d.go", candidates-1) {
+		t.Errorf("first read = %q, want largest file %q", goReads[0], fmt.Sprintf("f%04d.go", candidates-1))
+	}
+}
+
+func TestCollectCyclomaticP95(t *testing.T) {
+	// Arrange
+	simple := "package p\nfunc a() {}"
+	complex := "package p\nfunc b() {\n  if x { }\n  for { }\n  if y && z { }\n}"
+
+	responses := defaultResponses()
+	responses["/repos/org/repo/git/trees/main"] = makeTreeJSON([]string{"go.mod", "a.go", "b.go", "vendor/dep.go"})
+	client := &mockClient{
+		responses: responses,
+		fileContents: map[string]string{
+			"a.go":          simple,
+			"b.go":          complex,
+			"vendor/dep.go": complex,
+		},
+	}
+	src := NewSourceWithClient(client)
+	repo := model.Repository{URL: "github.com/org/repo", Branch: "main"}
+
+	// Act
+	metrics, err := src.Collect(context.Background(), repo)
+	if err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	// Assert
+	m, ok := findMetric(metrics, model.MetricTypeCyclomaticP95)
+	if !ok {
+		t.Fatal("missing cyclomatic_p95 metric")
+	}
+	// one service (root, go.mod), sampled complexities {1, 5}; p95 interpolates toward 5.
+	want := percentile([]float64{1, 5}, 0.95)
+	if math.Abs(m.Value-want) > 1e-9 {
+		t.Errorf("cyclomatic p95 = %v, want %v", m.Value, want)
+	}
+	for _, p := range client.fileReads {
+		if p == "vendor/dep.go" {
+			t.Error("vendored file was read, should be excluded")
+		}
+	}
+}
+
+func TestCollectCyclomaticP95NoSource(t *testing.T) {
+	responses := defaultResponses()
+	responses["/repos/org/repo/git/trees/main"] = makeTreeJSON([]string{"README.md", "docs/guide.txt"})
 
 	client := &mockClient{responses: responses}
 	src := NewSourceWithClient(client)
@@ -682,12 +816,12 @@ func TestCollectLargeFileRatioNoBlobs(t *testing.T) {
 		t.Fatalf("Collect: %v", err)
 	}
 
-	m, ok := findMetric(metrics, model.MetricTypeLargeFileRatio)
+	m, ok := findMetric(metrics, model.MetricTypeCyclomaticP95)
 	if !ok {
-		t.Fatal("missing large_file_ratio metric")
+		t.Fatal("missing cyclomatic_p95 metric")
 	}
 	if m.Value != noDataValue {
-		t.Errorf("large file ratio = %v, want %v", m.Value, noDataValue)
+		t.Errorf("cyclomatic p95 = %v, want %v", m.Value, noDataValue)
 	}
 }
 
