@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"unicode"
 
 	"github.com/kobbikobb/complexity-radar/internal/model"
 )
@@ -97,7 +98,7 @@ func matchManifest(fileName string) (manifestParser, bool) {
 func isVendored(path string) bool {
 	for _, seg := range strings.Split(path, "/") {
 		switch seg {
-		case "node_modules", "vendor", ".venv":
+		case "node_modules", "vendor", ".venv", "venv", ".tox", "target", "site-packages":
 			return true
 		}
 	}
@@ -189,6 +190,18 @@ func parseRequirementsTxt(content string) []string {
 	return names
 }
 
+var pyQuotedRe = regexp.MustCompile(`["']([^"']+)["']`)
+
+// isPoetryDeps reports whether a section holds poetry-style dependency keys,
+// including [tool.poetry.group.<name>.dependencies].
+func isPoetryDeps(section string) bool {
+	switch section {
+	case "[tool.poetry.dependencies]", "[tool.poetry.dev-dependencies]":
+		return true
+	}
+	return strings.HasPrefix(section, "[tool.poetry.group.") && strings.HasSuffix(section, ".dependencies]")
+}
+
 func parsePyprojectToml(content string) []string {
 	var names []string
 	section := ""
@@ -200,8 +213,8 @@ func parsePyprojectToml(content string) []string {
 			inProjectDeps = false
 			continue
 		}
-		switch section {
-		case "[project]":
+		switch {
+		case section == "[project]":
 			if strings.HasPrefix(line, "dependencies") && strings.Contains(line, "[") {
 				inProjectDeps = true
 				line = line[strings.Index(line, "[")+1:]
@@ -213,17 +226,27 @@ func parsePyprojectToml(content string) []string {
 				}
 				for _, item := range strings.Split(line, ",") {
 					item = strings.Trim(strings.TrimSpace(item), `"'`)
+					if strings.HasPrefix(item, "#") {
+						continue
+					}
 					if name := pyPackageName(item); name != "" {
 						names = append(names, name)
 					}
 				}
 			}
-		case "[tool.poetry.dependencies]", "[tool.poetry.dev-dependencies]":
-			if line == "" || strings.HasPrefix(line, "#") {
+		case section == "[project.optional-dependencies]":
+			for _, m := range pyQuotedRe.FindAllStringSubmatch(line, -1) {
+				if name := pyPackageName(m[1]); name != "" {
+					names = append(names, name)
+				}
+			}
+		case isPoetryDeps(section):
+			if line == "" || strings.HasPrefix(line, "#") ||
+				strings.HasPrefix(line, "{") || strings.HasPrefix(line, "}") || strings.HasPrefix(line, "[") {
 				continue
 			}
 			key := strings.ToLower(strings.Trim(strings.TrimSpace(strings.SplitN(line, "=", 2)[0]), `"'`))
-			if key != "" && key != "python" {
+			if key != "" && key != "python" && strings.ContainsFunc(key, unicode.IsLetter) {
 				names = append(names, key)
 			}
 		}
@@ -242,7 +265,7 @@ func pyPackageName(spec string) string {
 	return strings.ToLower(name[0])
 }
 
-var csprojPackageRe = regexp.MustCompile(`<PackageReference\s+[^>]*Include\s*=\s*"([^"]+)"`)
+var csprojPackageRe = regexp.MustCompile(`(?i)<PackageReference\s+[^>]*Include\s*=\s*"([^"]+)"`)
 
 func parseCsproj(content string) []string {
 	var names []string

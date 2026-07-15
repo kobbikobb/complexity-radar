@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"reflect"
 	"testing"
 	"time"
 
@@ -851,15 +852,21 @@ func TestParseGoMod(t *testing.T) {
 }
 
 func TestParsePomXML(t *testing.T) {
+	// Arrange
 	content := `<project>
 <dependencies>
-<dependency><groupId>a</groupId></dependency>
-<dependency><groupId>b</groupId></dependency>
+<dependency><groupId>org.foo</groupId><artifactId>bar</artifactId></dependency>
+<dependency><groupId>com.baz</groupId><artifactId>qux</artifactId></dependency>
 </dependencies>
 </project>`
+
+	// Act
 	names := parsePomXML(content)
-	if len(names) != 2 {
-		t.Errorf("count = %v, want 2", len(names))
+
+	// Assert
+	want := []string{"org.foo:bar", "com.baz:qux"}
+	if !reflect.DeepEqual(names, want) {
+		t.Errorf("names = %v, want %v", names, want)
 	}
 }
 

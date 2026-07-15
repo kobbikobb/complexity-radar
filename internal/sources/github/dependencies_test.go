@@ -105,6 +105,57 @@ django = "^4.0"`,
 		}
 	})
 
+	t.Run("should dedup the same dep pinned at different versions", func(t *testing.T) {
+		// Arrange
+		files := map[string]string{
+			"requirements.txt":     `requests>=2.0`,
+			"requirements-dev.txt": `requests==3.1`,
+		}
+
+		// Act
+		got := depCount(t, files)
+
+		// Assert
+		if got != 1 {
+			t.Errorf("distinct dependency count = %v, want 1 (requests, version-stripped)", got)
+		}
+	})
+
+	t.Run("should exclude vendored paths but keep substring matches", func(t *testing.T) {
+		// Arrange
+		files := map[string]string{
+			"vendor/dep/package.json":            `{"dependencies": {"vendored": "1"}}`,
+			"my-node_modules-utils/package.json": `{"dependencies": {"realdep": "1"}}`,
+		}
+
+		// Act
+		got := depCount(t, files)
+
+		// Assert
+		if got != 1 {
+			t.Errorf("distinct dependency count = %v, want 1 (realdep only)", got)
+		}
+	})
+
+	t.Run("should count poetry group and optional dependencies", func(t *testing.T) {
+		// Arrange
+		files := map[string]string{
+			"pyproject.toml": `[tool.poetry.group.dev.dependencies]
+pytest = "^7.0"
+
+[project.optional-dependencies]
+test = ["coverage", "tox>=4"]`,
+		}
+
+		// Act
+		got := depCount(t, files)
+
+		// Assert
+		if got != 3 {
+			t.Errorf("distinct dependency count = %v, want 3 (pytest, coverage, tox)", got)
+		}
+	})
+
 	t.Run("should pick up a requirements-dev.txt", func(t *testing.T) {
 		// Arrange
 		files := map[string]string{
