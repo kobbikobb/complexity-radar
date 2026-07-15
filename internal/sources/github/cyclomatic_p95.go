@@ -60,7 +60,7 @@ func collectCyclomaticP95(ctx context.Context, client APIClient, owner, name, br
 
 	services := map[string][]GitTreeEntry{}
 	for _, e := range tree.Tree {
-		if e.Type != "blob" || isVendored(e.Path) || !sourceExtensions[strings.ToLower(path.Ext(e.Path))] {
+		if e.Type != "blob" || isVendored(e.Path) || isGenerated(e.Path) || !sourceExtensions[strings.ToLower(path.Ext(e.Path))] {
 			continue
 		}
 		key := serviceKey(e.Path, manifestDirs)
@@ -102,6 +102,10 @@ func collectCyclomaticP95(ctx context.Context, client APIClient, owner, name, br
 			if err != nil {
 				continue
 			}
+			// Minified/bundled files pack everything onto one huge line; their token count isn't meaningful complexity.
+			if longestLineLen(content) > 5000 {
+				continue
+			}
 			values[k] = append(values[k], float64(complexity(content)))
 		}
 		if !anyLeft {
@@ -109,35 +113,78 @@ func collectCyclomaticP95(ctx context.Context, client APIClient, owner, name, br
 		}
 	}
 
-	var p95s []float64
-	parts := make([]string, 0, len(keys))
+	type servicePercentile struct {
+		label string
+		p95   float64
+	}
+	var services95 []servicePercentile
 	for _, k := range keys {
 		vals := values[k]
 		if len(vals) == 0 {
 			continue
 		}
 		sort.Float64s(vals)
-		p := percentile(vals, 0.95)
-		p95s = append(p95s, p)
 		label := k
 		if label == "" || label == "." {
 			label = "(root)"
 		}
-		parts = append(parts, fmt.Sprintf("%s=%.0f", label, p))
+		services95 = append(services95, servicePercentile{label, percentile(vals, 0.95)})
 	}
 
-	if len(p95s) == 0 {
+	if len(services95) == 0 {
 		return []model.SourceMetric{{Type: model.MetricTypeCyclomaticP95, Value: noDataValue}}
 	}
 
 	sum := 0.0
-	for _, p := range p95s {
-		sum += p
+	for _, s := range services95 {
+		sum += s.p95
 	}
-	mean := sum / float64(len(p95s))
-	log.Printf("cyclomatic p95 by service: %s (mean=%.1f)", strings.Join(parts, " "), mean)
+	mean := sum / float64(len(services95))
+
+	sort.Slice(services95, func(i, j int) bool { return services95[i].p95 > services95[j].p95 })
+	top := services95
+	if len(top) > 10 {
+		top = top[:10]
+	}
+	parts := make([]string, len(top))
+	for i, s := range top {
+		parts[i] = fmt.Sprintf("%s=%.0f", s.label, s.p95)
+	}
+	log.Printf("cyclomatic p95: mean=%.1f across %d services; worst: %s", mean, len(services95), strings.Join(parts, " "))
 
 	return []model.SourceMetric{{Type: model.MetricTypeCyclomaticP95, Value: mean}}
+}
+
+// isGenerated reports whether a path is a generated or build artifact whose token count isn't hand-written complexity.
+func isGenerated(p string) bool {
+	for _, seg := range strings.Split(p, "/") {
+		switch seg {
+		case "dist", "build", "out", "bin", "obj", "generated", "__generated__", ".next", "coverage", ".turbo", "target":
+			return true
+		}
+	}
+	base := strings.ToLower(path.Base(p))
+	switch {
+	case strings.HasSuffix(base, ".min.js"),
+		strings.HasSuffix(base, ".bundle.js"),
+		strings.Contains(base, ".generated."),
+		strings.HasSuffix(base, ".pb.go"),
+		strings.HasSuffix(base, "_pb2.py"),
+		strings.HasSuffix(base, ".g.cs"),
+		strings.HasSuffix(base, ".designer.cs"):
+		return true
+	}
+	return false
+}
+
+func longestLineLen(s string) int {
+	longest := 0
+	for _, line := range strings.Split(s, "\n") {
+		if len(line) > longest {
+			longest = len(line)
+		}
+	}
+	return longest
 }
 
 // serviceKey returns the nearest-ancestor manifest directory, or "" for the repo-root bucket.

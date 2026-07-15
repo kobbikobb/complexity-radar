@@ -20,7 +20,7 @@ const (
 	refSecurityHigh            = 10.0
 	refSecurityMedium          = 20.0
 	refSecurityLow             = 30.0
-	refCyclomaticP95           = 80.0 // placeholder; file-level values run high, needs calibration against a real repo run
+	refCyclomaticP95           = 150.0 // provisional; needs recalibration against a real repo run now that generated files are excluded
 )
 
 func NormalizeMetric(metricType model.MetricTypeName, value float64) float64 {

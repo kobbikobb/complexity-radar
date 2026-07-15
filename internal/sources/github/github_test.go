@@ -828,6 +828,75 @@ func TestCollectCyclomaticP95NoSource(t *testing.T) {
 	}
 }
 
+func TestIsGenerated(t *testing.T) {
+	tests := []struct {
+		name string
+		path string
+		want bool
+	}{
+		{"should exclude a dist path segment", "services/web/dist/app.ts", true},
+		{"should exclude a .min.js filename", "src/vendor/foo.min.js", true},
+		{"should not exclude a normal source file", "src/foo.ts", false},
+		{"should match segments only, not substrings", "my-dist-thing/foo.ts", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isGenerated(tt.path)
+
+			if got != tt.want {
+				t.Errorf("isGenerated(%q) = %v, want %v", tt.path, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestLongestLineLen(t *testing.T) {
+	// Arrange
+	s := "ab\ncdef\ng"
+
+	// Act
+	got := longestLineLen(s)
+
+	// Assert
+	if got != 4 {
+		t.Errorf("longestLineLen(%q) = %d, want 4", s, got)
+	}
+}
+
+func TestCollectCyclomaticP95SkipsMinifiedContent(t *testing.T) {
+	// Arrange
+	normal := "package p\nif a {}"
+	minified := "package p\n" + strings.Repeat("if x ", 2000)
+
+	responses := defaultResponses()
+	responses["/repos/org/repo/git/trees/main"] = makeTreeJSON([]string{"go.mod", "normal.go", "huge.go"})
+	client := &mockClient{
+		responses: responses,
+		fileContents: map[string]string{
+			"normal.go": normal,
+			"huge.go":   minified,
+		},
+	}
+	src := NewSourceWithClient(client)
+	repo := model.Repository{URL: "github.com/org/repo", Branch: "main"}
+
+	// Act
+	metrics, err := src.Collect(context.Background(), repo)
+	if err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	// Assert
+	m, ok := findMetric(metrics, model.MetricTypeCyclomaticP95)
+	if !ok {
+		t.Fatal("missing cyclomatic_p95 metric")
+	}
+	if m.Value != 2 {
+		t.Errorf("cyclomatic p95 = %v, want 2 (minified file excluded, only normal.go counted)", m.Value)
+	}
+}
+
 func TestCollectGitopsDeployFrequency(t *testing.T) {
 	commits := []map[string]string{
 		{"sha": "abc123"},
