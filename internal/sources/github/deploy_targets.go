@@ -9,12 +9,10 @@ import (
 
 func collectDeployTargets(ctx context.Context, client APIClient, owner, name, branch string, tree *GitTree) []model.SourceMetric {
 	targets := make(map[string]bool)
-	workflowCount := 0
 
 	for _, entry := range tree.Tree {
 		if strings.HasPrefix(entry.Path, ".github/workflows/") &&
 			(strings.HasSuffix(entry.Path, ".yml") || strings.HasSuffix(entry.Path, ".yaml")) {
-			workflowCount++
 			content, err := client.GetFileContent(ctx, owner, name, entry.Path, branch)
 			if err != nil {
 				continue
@@ -25,13 +23,8 @@ func collectDeployTargets(ctx context.Context, client APIClient, owner, name, br
 
 	collectTargetsFromDeployConfigs(ctx, client, owner, name, branch, targets)
 
-	divisor := workflowCount
-	if divisor == 0 {
-		divisor = 1
-	}
-
 	return []model.SourceMetric{
-		{Type: model.MetricTypeDeployTargets, Value: float64(len(targets)) / float64(divisor)},
+		{Type: model.MetricTypeDeployTargets, Value: float64(len(targets))},
 	}
 }
 

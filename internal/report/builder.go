@@ -81,6 +81,9 @@ func BuildFromDB(store Store, project model.Project, cfg *config.Config, warn io
 			if err != nil {
 				continue
 			}
+			if _, ok := metricTypeLookup(mt.Name); !ok {
+				continue
+			}
 			if v, ok := rawMetrics[mt.Name]; ok {
 				prevMetrics[mt.Name] = v
 			}
