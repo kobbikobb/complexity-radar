@@ -54,6 +54,7 @@ const (
 	MetricTypeSecurityMedium          MetricTypeName = "security_medium"
 	MetricTypeSecurityLow             MetricTypeName = "security_low"
 	MetricTypeDecisionDensity         MetricTypeName = "decision_density"
+	MetricTypeFeatureFlagDebt         MetricTypeName = "feature_flag_debt"
 )
 
 type MetricType struct {
@@ -114,6 +115,10 @@ func MetricTypes() []MetricType {
 			RawDef:   "per-service p95 of per-file decision density (decision tokens per 100 non-blank lines: (1 + if/elif/for/while/case/catch/&&/||/? tokens) ÷ non-blank lines ×100), rolled up as mean of per-service p95; size-biased sample, capped ~400 file reads; vendored/generated dirs excluded; -1=no source",
 			ScoreDef: "asymptotic: 100*20/(value+20); lower better; weight 0.8 within Code",
 			Source:   "Git tree + sampled file contents (regex approximation, NOT AST cyclomatic; counts tokens in comments/strings)"},
+		{Name: MetricTypeFeatureFlagDebt, Dimension: DimensionCode, Unit: "count", Weight: 0.2,
+			RawDef:   "count of active DevCycle feature flags flagged stale (DevCycle staleness signal, else not updated in >30d); 0 when unconfigured",
+			ScoreDef: "asymptotic: 100*15/(value+15); lower better; weight 0.2 within Code",
+			Source:   "DevCycle Management API /v2/projects/{key}/features"},
 	}
 }
 
@@ -152,6 +157,7 @@ type Repository struct {
 	DeployDetection    string
 	IncludePrereleases bool
 	TagPrefix          string
+	DevCycleProjectKey string
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
 }

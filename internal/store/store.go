@@ -253,8 +253,8 @@ func (s *Store) CreateRepository(r *model.Repository) error {
 		r.DeployDetection = config.DeployDetectionReleases
 	}
 	result, err := s.db.Exec(
-		"INSERT INTO repositories (project_id, url, branch, gitops_repo_url, deploy_detection, include_prereleases, tag_prefix, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		r.ProjectID, r.URL, r.Branch, r.GitopsRepoURL, r.DeployDetection, r.IncludePrereleases, r.TagPrefix, now, now,
+		"INSERT INTO repositories (project_id, url, branch, gitops_repo_url, deploy_detection, include_prereleases, tag_prefix, devcycle_project_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		r.ProjectID, r.URL, r.Branch, r.GitopsRepoURL, r.DeployDetection, r.IncludePrereleases, r.TagPrefix, r.DevCycleProjectKey, now, now,
 	)
 	if err != nil {
 		return fmt.Errorf("inserting repository: %w", err)
@@ -277,9 +277,9 @@ func (s *Store) FindOrCreateRepository(projectID int64, url, branch string) (*mo
 	r := &model.Repository{}
 	var createdAt, updatedAt string
 	err := s.db.QueryRow(
-		"SELECT id, project_id, url, branch, gitops_repo_url, deploy_detection, include_prereleases, tag_prefix, created_at, updated_at FROM repositories WHERE project_id = ? AND url = ?",
+		"SELECT id, project_id, url, branch, gitops_repo_url, deploy_detection, include_prereleases, tag_prefix, devcycle_project_key, created_at, updated_at FROM repositories WHERE project_id = ? AND url = ?",
 		projectID, url,
-	).Scan(&r.ID, &r.ProjectID, &r.URL, &r.Branch, &r.GitopsRepoURL, &r.DeployDetection, &r.IncludePrereleases, &r.TagPrefix, &createdAt, &updatedAt)
+	).Scan(&r.ID, &r.ProjectID, &r.URL, &r.Branch, &r.GitopsRepoURL, &r.DeployDetection, &r.IncludePrereleases, &r.TagPrefix, &r.DevCycleProjectKey, &createdAt, &updatedAt)
 	if err == nil {
 		r.CreatedAt, err = time.Parse(time.RFC3339, createdAt)
 		if err != nil {
@@ -323,8 +323,8 @@ func (s *Store) GetRepository(id int64) (*model.Repository, error) {
 	r := &model.Repository{}
 	var createdAt, updatedAt string
 	err := s.db.QueryRow(
-		"SELECT id, project_id, url, branch, gitops_repo_url, deploy_detection, include_prereleases, tag_prefix, created_at, updated_at FROM repositories WHERE id = ?", id,
-	).Scan(&r.ID, &r.ProjectID, &r.URL, &r.Branch, &r.GitopsRepoURL, &r.DeployDetection, &r.IncludePrereleases, &r.TagPrefix, &createdAt, &updatedAt)
+		"SELECT id, project_id, url, branch, gitops_repo_url, deploy_detection, include_prereleases, tag_prefix, devcycle_project_key, created_at, updated_at FROM repositories WHERE id = ?", id,
+	).Scan(&r.ID, &r.ProjectID, &r.URL, &r.Branch, &r.GitopsRepoURL, &r.DeployDetection, &r.IncludePrereleases, &r.TagPrefix, &r.DevCycleProjectKey, &createdAt, &updatedAt)
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("repository %d not found", id)
 	}
@@ -345,7 +345,7 @@ func (s *Store) GetRepository(id int64) (*model.Repository, error) {
 
 func (s *Store) ListRepositories(projectID int64) ([]model.Repository, error) {
 	rows, err := s.db.Query(
-		"SELECT id, project_id, url, branch, gitops_repo_url, deploy_detection, include_prereleases, tag_prefix, created_at, updated_at FROM repositories WHERE project_id = ? ORDER BY id",
+		"SELECT id, project_id, url, branch, gitops_repo_url, deploy_detection, include_prereleases, tag_prefix, devcycle_project_key, created_at, updated_at FROM repositories WHERE project_id = ? ORDER BY id",
 		projectID,
 	)
 	if err != nil {
@@ -357,7 +357,7 @@ func (s *Store) ListRepositories(projectID int64) ([]model.Repository, error) {
 	for rows.Next() {
 		var r model.Repository
 		var createdAt, updatedAt string
-		if err := rows.Scan(&r.ID, &r.ProjectID, &r.URL, &r.Branch, &r.GitopsRepoURL, &r.DeployDetection, &r.IncludePrereleases, &r.TagPrefix, &createdAt, &updatedAt); err != nil {
+		if err := rows.Scan(&r.ID, &r.ProjectID, &r.URL, &r.Branch, &r.GitopsRepoURL, &r.DeployDetection, &r.IncludePrereleases, &r.TagPrefix, &r.DevCycleProjectKey, &createdAt, &updatedAt); err != nil {
 			return nil, fmt.Errorf("scanning repository: %w", err)
 		}
 		r.CreatedAt, err = time.Parse(time.RFC3339, createdAt)
@@ -380,8 +380,8 @@ func (s *Store) UpdateRepository(r *model.Repository) error {
 		r.DeployDetection = config.DeployDetectionReleases
 	}
 	result, err := s.db.Exec(
-		"UPDATE repositories SET url = ?, branch = ?, gitops_repo_url = ?, deploy_detection = ?, include_prereleases = ?, tag_prefix = ?, updated_at = ? WHERE id = ?",
-		r.URL, r.Branch, r.GitopsRepoURL, r.DeployDetection, r.IncludePrereleases, r.TagPrefix, now, r.ID,
+		"UPDATE repositories SET url = ?, branch = ?, gitops_repo_url = ?, deploy_detection = ?, include_prereleases = ?, tag_prefix = ?, devcycle_project_key = ?, updated_at = ? WHERE id = ?",
+		r.URL, r.Branch, r.GitopsRepoURL, r.DeployDetection, r.IncludePrereleases, r.TagPrefix, r.DevCycleProjectKey, now, r.ID,
 	)
 	if err != nil {
 		return fmt.Errorf("updating repository: %w", err)

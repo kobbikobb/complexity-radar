@@ -5,7 +5,7 @@ import (
 
 	"github.com/kobbikobb/complexity-radar/internal/collector"
 	"github.com/kobbikobb/complexity-radar/internal/runner"
-	"github.com/kobbikobb/complexity-radar/internal/sources/github"
+	"github.com/kobbikobb/complexity-radar/internal/sources"
 	"github.com/kobbikobb/complexity-radar/internal/store"
 	"github.com/spf13/cobra"
 )
@@ -38,7 +38,7 @@ func runCollect(cmd *cobra.Command, args []string) error {
 	}
 	defer func() { _ = s.Close() }()
 
-	r, err := runner.NewFromStore(s, projectName, github.NewSource())
+	r, err := runner.NewFromStore(s, projectName, sources.Default())
 	if err != nil {
 		return err
 	}
