@@ -90,6 +90,24 @@ func overallGrade(overall float64, dims []DimensionReport) string {
 	return scoreGrade(overall)
 }
 
+func isDisplayOnly(mt model.MetricType) bool {
+	return strings.Contains(mt.ScoreDef, "display-only")
+}
+
+// scoredDimensionExtremes returns the lowest and highest score among dimensions
+// that actually have data. Returns (+Inf, -Inf) when none do.
+func scoredDimensionExtremes(dims []DimensionReport) (lo, hi float64) {
+	lo, hi = math.Inf(1), math.Inf(-1)
+	for _, d := range dims {
+		if d.MetricCount == 0 {
+			continue
+		}
+		lo = math.Min(lo, d.Score)
+		hi = math.Max(hi, d.Score)
+	}
+	return lo, hi
+}
+
 func SecurityBreakdown(metrics map[model.MetricTypeName]float64) string {
 	crit := int(metrics[model.MetricTypeSecurityCritical])
 	high := int(metrics[model.MetricTypeSecurityHigh])
@@ -186,10 +204,20 @@ func (f *TerminalFormatter) Format(report Report) string {
 		name := formatMetricName(m.Name)
 		raw := formatRawValue(m.RawValue, m.Unit)
 		unit := formatUnit(m.Unit)
-		b.WriteString(tableRow(metWidths, name, raw, f.colorScore(m.Normalized), unit))
+		mt := methodology[m.Name]
+		score := f.colorScore(m.Normalized)
+		if isDisplayOnly(mt) {
+			score = "—"
+		}
+		row := strings.TrimRight(tableRow(metWidths, name, raw, score, unit), "\n")
+		b.WriteString(row + "  " + mt.ScoreDef + "\n")
 	}
 	b.WriteString(tableBorder(metWidths, "└", "┴", "┘"))
 	b.WriteString("\n")
+
+	if lo, hi := scoredDimensionExtremes(report.Dimensions); lo < 10 && hi > 60 {
+		fmt.Fprintf(&b, "  ⚠ Suspicious score spread: one dimension scored <10 while another >60 — likely a scoring-curve bug.\n\n")
+	}
 
 	if f.ShowExplain {
 		b.WriteString("  Methodology:\n")

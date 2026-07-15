@@ -20,18 +20,30 @@ func ScoreDimensions(metrics map[model.MetricTypeName]float64) []DimensionResult
 		model.DimensionCode,
 	}
 
-	metricTypeMap := make(map[model.MetricTypeName]model.Dimension)
+	type meta struct {
+		dim    model.Dimension
+		weight float64
+	}
+	metricMeta := make(map[model.MetricTypeName]meta)
 	for _, mt := range model.MetricTypes() {
-		metricTypeMap[mt.Name] = mt.Dimension
+		w := mt.Weight
+		if w <= 0 {
+			w = 1.0
+		}
+		metricMeta[mt.Name] = meta{dim: mt.Dimension, weight: w}
 	}
 
-	grouped := make(map[model.Dimension][]float64)
+	type acc struct {
+		weighted, weight float64
+		count            int
+	}
+	grouped := make(map[model.Dimension]*acc)
 	for _, d := range dimensions {
-		grouped[d] = nil
+		grouped[d] = &acc{}
 	}
 
 	for name, value := range metrics {
-		dim, ok := metricTypeMap[name]
+		m, ok := metricMeta[name]
 		if !ok {
 			continue
 		}
@@ -39,24 +51,23 @@ func ScoreDimensions(metrics map[model.MetricTypeName]float64) []DimensionResult
 		if math.IsNaN(normalized) {
 			continue
 		}
-		grouped[dim] = append(grouped[dim], normalized)
+		a := grouped[m.dim]
+		a.weighted += normalized * m.weight
+		a.weight += m.weight
+		a.count++
 	}
 
 	results := make([]DimensionResult, len(dimensions))
 	for i, d := range dimensions {
-		values := grouped[d]
+		a := grouped[d]
 		score := 0.0
-		if len(values) > 0 {
-			sum := 0.0
-			for _, v := range values {
-				sum += v
-			}
-			score = sum / float64(len(values))
+		if a.weight > 0 {
+			score = a.weighted / a.weight
 		}
 		results[i] = DimensionResult{
 			Dimension:   d,
 			Score:       score,
-			MetricCount: len(values),
+			MetricCount: a.count,
 		}
 	}
 

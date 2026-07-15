@@ -7,43 +7,40 @@ import (
 )
 
 const (
-	refSecurityVulnerabilities = 50.0
-	refStalePRs                = 30.0
+	refSecurityVulnerabilities = 70.0
+	refStalePRs                = 45.0
 	refBuildTime               = 1800.0
-	refK8sDeployments          = 200.0
-	refContainerImages         = 200.0
-	refDeployTargets           = 50.0
-	refDependencyCount         = 20.0  // provisional; deps-per-service ratio is small (was 1500 for the raw total), needs calibration against a real run
+	refK8sDeployments          = 100.0
+	refContainerImages         = 40.0
+	refDeployTargets           = 20.0
+	refDependencyCount         = 8.0   // deps-per-service ratio
 	refDeployFrequency         = 5.0   // weekday deploy = full marks, not CD cadence
 	refCICDComplexity          = 100.0 // CI/CD automation maturity (higher is better); ref matches cicd.go's raw cap of 100
 	refSecurityCritical        = 5.0
-	refSecurityHigh            = 10.0
-	refSecurityMedium          = 20.0
-	refSecurityLow             = 30.0
-	refDecisionDensity         = 15.0 // provisional; density is small (~5-20 tokens per 100 non-blank lines), needs calibration against a real run
+	refSecurityHigh            = 40.0
+	refSecurityMedium          = 60.0
+	refSecurityLow             = 40.0
+	refDecisionDensity         = 20.0
 )
 
 func NormalizeMetric(metricType model.MetricTypeName, value float64) float64 {
 	switch metricType {
 	case model.MetricTypeSecurityVulnerabilities:
-		return clamp(100 - logNormalize(value, refSecurityVulnerabilities)*100)
+		return asymptotic(value, refSecurityVulnerabilities)
 	case model.MetricTypeStalePRs:
-		return clamp(100 - logNormalize(value, refStalePRs)*100)
+		return asymptotic(value, refStalePRs)
 	case model.MetricTypeBuildTime:
 		return clamp(100 - (value/refBuildTime)*100)
 	case model.MetricTypeK8sDeployments:
-		return clamp(100 - logNormalize(value, refK8sDeployments)*100)
+		return asymptotic(value, refK8sDeployments)
 	case model.MetricTypeContainerImages:
-		return clamp(100 - logNormalize(value, refContainerImages)*100)
+		return asymptotic(value, refContainerImages)
 	case model.MetricTypeDeployTargets:
-		return clamp(100 - logNormalize(value, refDeployTargets)*100)
+		return asymptotic(value, refDeployTargets)
 	case model.MetricTypeDependencyCount:
-		return clamp(100 - logNormalize(value, refDependencyCount)*100)
+		return asymptotic(value, refDependencyCount)
 	case model.MetricTypeDecisionDensity:
-		if value < 0 {
-			return math.NaN()
-		}
-		return clamp(100 - logNormalize(value, refDecisionDensity)*100)
+		return asymptotic(value, refDecisionDensity)
 	case model.MetricTypeDeployFrequency:
 		if value < 0 {
 			return math.NaN()
@@ -54,16 +51,29 @@ func NormalizeMetric(metricType model.MetricTypeName, value float64) float64 {
 	case model.MetricTypeCICDComplexity:
 		return clamp(logNormalize(value, refCICDComplexity) * 100)
 	case model.MetricTypeSecurityCritical:
-		return clamp(100 - logNormalize(value, refSecurityCritical)*100)
+		return asymptotic(value, refSecurityCritical)
 	case model.MetricTypeSecurityHigh:
-		return clamp(100 - logNormalize(value, refSecurityHigh)*100)
+		return asymptotic(value, refSecurityHigh)
 	case model.MetricTypeSecurityMedium:
-		return clamp(100 - logNormalize(value, refSecurityMedium)*100)
+		return asymptotic(value, refSecurityMedium)
 	case model.MetricTypeSecurityLow:
-		return clamp(100 - logNormalize(value, refSecurityLow)*100)
+		return asymptotic(value, refSecurityLow)
 	default:
 		return 0
 	}
+}
+
+// asymptotic scores a lower-is-better metric as 100*ref/(value+ref): 100 at 0,
+// 50 at ref, approaching but never reaching 0 as value grows. A negative value
+// (no-data sentinel) yields NaN so it is skipped rather than scored.
+func asymptotic(value, ref float64) float64 {
+	if value < 0 {
+		return math.NaN()
+	}
+	if ref <= 0 {
+		return 0
+	}
+	return 100 * ref / (value + ref)
 }
 
 // logNormalize normalizes a value using log scale to reduce impact of large counts.
