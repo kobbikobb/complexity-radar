@@ -40,7 +40,7 @@ func runScan(cmd *cobra.Command, args []string) error {
 	}
 	defer func() { _ = s.Close() }()
 
-	r, err := runner.NewFromStore(s, projectName, sources.Default())
+	r, err := runner.NewFromStore(s, projectName, sources.Default(), sources.DefaultProject()...)
 	if err != nil {
 		return err
 	}
@@ -56,6 +56,7 @@ func runScan(cmd *cobra.Command, args []string) error {
 	formatter := terminal.New()
 	formatter.UseColor = true
 
+	fmt.Println(formatter.Format(report.BuildProjectReport(*result, r.Config())))
 	reports := report.BuildFromResult(*result, r.Config())
 	for _, rpt := range reports {
 		fmt.Println(formatter.Format(rpt))

@@ -23,33 +23,33 @@ func daysAgo(d int) string {
 	return time.Now().Add(-time.Duration(d) * 24 * time.Hour).UTC().Format(time.RFC3339)
 }
 
-func collectDebt(t *testing.T, repo model.Repository, features []Feature) ([]model.SourceMetric, *stubLister) {
+func collectDebt(t *testing.T, project model.Project, features []Feature) ([]model.SourceMetric, *stubLister) {
 	t.Helper()
 
 	stub := &stubLister{features: features}
 	src := NewSourceWithClient(func(string, string) FeatureLister { return stub })
 
-	metrics, err := src.Collect(context.Background(), repo)
+	metrics, err := src.CollectProject(context.Background(), project)
 	if err != nil {
-		t.Fatalf("Collect: %v", err)
+		t.Fatalf("CollectProject: %v", err)
 	}
 	return metrics, stub
 }
 
-func TestCollect(t *testing.T) {
+func TestCollectProject(t *testing.T) {
 	t.Setenv("DEVCYCLE_CLIENT_ID", "id")
 	t.Setenv("DEVCYCLE_CLIENT_SECRET", "secret")
 
 	t.Run("should count active flags flagged stale by devcycle", func(t *testing.T) {
 		// Arrange
-		repo := model.Repository{DevCycleProjectKey: "proj"}
+		project := model.Project{DevCycleProjectKey: "proj"}
 		features := []Feature{
 			{Status: "active", Staleness: &Staleness{Reason: "unused"}},
 			{Status: "active", UpdatedAt: daysAgo(1)},
 		}
 
 		// Act
-		metrics, _ := collectDebt(t, repo, features)
+		metrics, _ := collectDebt(t, project, features)
 
 		// Assert
 		if got := metrics[0].Value; got != 1 {
@@ -59,14 +59,14 @@ func TestCollect(t *testing.T) {
 
 	t.Run("should count active flags untouched past the fallback threshold", func(t *testing.T) {
 		// Arrange
-		repo := model.Repository{DevCycleProjectKey: "proj"}
+		project := model.Project{DevCycleProjectKey: "proj"}
 		features := []Feature{
 			{Status: "active", UpdatedAt: daysAgo(45)},
 			{Status: "active", UpdatedAt: daysAgo(10)},
 		}
 
 		// Act
-		metrics, _ := collectDebt(t, repo, features)
+		metrics, _ := collectDebt(t, project, features)
 
 		// Assert
 		if got := metrics[0].Value; got != 1 {
@@ -76,14 +76,14 @@ func TestCollect(t *testing.T) {
 
 	t.Run("should ignore non-active flags", func(t *testing.T) {
 		// Arrange
-		repo := model.Repository{DevCycleProjectKey: "proj"}
+		project := model.Project{DevCycleProjectKey: "proj"}
 		features := []Feature{
 			{Status: "complete", Staleness: &Staleness{Reason: "unused"}},
 			{Status: "archived", UpdatedAt: daysAgo(90)},
 		}
 
 		// Act
-		metrics, _ := collectDebt(t, repo, features)
+		metrics, _ := collectDebt(t, project, features)
 
 		// Assert
 		if got := metrics[0].Value; got != 0 {
@@ -92,15 +92,15 @@ func TestCollect(t *testing.T) {
 	})
 }
 
-func TestCollectSkipsWhenUnconfigured(t *testing.T) {
-	t.Run("should skip when repo has no project key", func(t *testing.T) {
+func TestCollectProjectSkipsWhenUnconfigured(t *testing.T) {
+	t.Run("should skip when project has no key", func(t *testing.T) {
 		// Arrange
 		t.Setenv("DEVCYCLE_CLIENT_ID", "id")
 		t.Setenv("DEVCYCLE_CLIENT_SECRET", "secret")
-		repo := model.Repository{}
+		project := model.Project{}
 
 		// Act
-		metrics, stub := collectDebt(t, repo, nil)
+		metrics, stub := collectDebt(t, project, nil)
 
 		// Assert
 		if metrics != nil {
@@ -115,10 +115,10 @@ func TestCollectSkipsWhenUnconfigured(t *testing.T) {
 		// Arrange
 		t.Setenv("DEVCYCLE_CLIENT_ID", "")
 		t.Setenv("DEVCYCLE_CLIENT_SECRET", "")
-		repo := model.Repository{DevCycleProjectKey: "proj"}
+		project := model.Project{DevCycleProjectKey: "proj"}
 
 		// Act
-		metrics, stub := collectDebt(t, repo, nil)
+		metrics, stub := collectDebt(t, project, nil)
 
 		// Assert
 		if metrics != nil {

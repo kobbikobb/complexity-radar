@@ -33,6 +33,7 @@ func (m *mockSource) SupportedMetrics() []model.MetricTypeName {
 type fakeMetricStore struct {
 	metricTypes     map[model.MetricTypeName]*model.MetricType
 	metrics         []model.Metric
+	projectMetrics  []model.ProjectMetric
 	dimensionScores []model.DimensionScore
 	nextMetricID    int64
 	nextDSID        int64
@@ -64,6 +65,14 @@ func (f *fakeMetricStore) CreateMetric(m *model.Metric) error {
 	m.ID = f.nextMetricID
 	m.CollectedAt = time.Now().UTC()
 	f.metrics = append(f.metrics, *m)
+	return nil
+}
+
+func (f *fakeMetricStore) CreateProjectMetric(m *model.ProjectMetric) error {
+	f.nextMetricID++
+	m.ID = f.nextMetricID
+	m.CollectedAt = time.Now().UTC()
+	f.projectMetrics = append(f.projectMetrics, *m)
 	return nil
 }
 
@@ -100,7 +109,7 @@ func TestCollect(t *testing.T) {
 	project := &model.Project{Name: "test-project", Description: "A test project"}
 	repo := model.Repository{ProjectID: project.ID, URL: "github.com/org/repo", Branch: "main"}
 
-	result, err := Collect(context.Background(), cfg, s, project, []model.Repository{repo}, src, nil)
+	result, err := Collect(context.Background(), cfg, s, project, []model.Repository{repo}, src, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -163,7 +172,7 @@ func TestCollectWithMultipleRepos(t *testing.T) {
 	repo1 := model.Repository{ProjectID: project.ID, URL: "github.com/org/repo1", Branch: "main"}
 	repo2 := model.Repository{ProjectID: project.ID, URL: "github.com/org/repo2", Branch: "develop"}
 
-	result, err := Collect(context.Background(), cfg, s, project, []model.Repository{repo1, repo2}, src, nil)
+	result, err := Collect(context.Background(), cfg, s, project, []model.Repository{repo1, repo2}, src, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -197,7 +206,7 @@ func TestCollectWithSourceError(t *testing.T) {
 	project := &model.Project{Name: "error-project"}
 	repo := model.Repository{ProjectID: project.ID, URL: "github.com/org/repo", Branch: "main"}
 
-	result, err := Collect(context.Background(), cfg, s, project, []model.Repository{repo}, src, nil)
+	result, err := Collect(context.Background(), cfg, s, project, []model.Repository{repo}, src, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

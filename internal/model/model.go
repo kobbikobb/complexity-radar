@@ -26,6 +26,14 @@ type Source interface {
 	SupportedMetrics() []MetricTypeName
 }
 
+// ProjectSource collects metrics scoped to a whole project rather than a single
+// repository (e.g. a feature-flag service whose flags belong to a project).
+type ProjectSource interface {
+	Name() string
+	CollectProject(ctx context.Context, project Project) ([]SourceMetric, error)
+	SupportedMetrics() []MetricTypeName
+}
+
 type Dimension string
 
 const (
@@ -141,11 +149,12 @@ func DisplayMetricTypes() []MetricType {
 }
 
 type Project struct {
-	ID          int64
-	Name        string
-	Description string
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	ID                 int64
+	Name               string
+	Description        string
+	DevCycleProjectKey string
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
 }
 
 type Repository struct {
@@ -157,7 +166,6 @@ type Repository struct {
 	DeployDetection    string
 	IncludePrereleases bool
 	TagPrefix          string
-	DevCycleProjectKey string
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
 }
@@ -165,6 +173,14 @@ type Repository struct {
 type Metric struct {
 	ID           int64
 	RepositoryID int64
+	MetricTypeID int64
+	Value        float64
+	CollectedAt  time.Time
+}
+
+type ProjectMetric struct {
+	ID           int64
+	ProjectID    int64
 	MetricTypeID int64
 	Value        float64
 	CollectedAt  time.Time

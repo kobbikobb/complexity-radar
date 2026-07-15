@@ -17,19 +17,21 @@ type Store interface {
 	FindOrCreateRepository(projectID int64, url, branch string) (*model.Repository, error)
 	GetMetricTypeByName(name model.MetricTypeName) (*model.MetricType, error)
 	CreateMetric(m *model.Metric) error
+	CreateProjectMetric(m *model.ProjectMetric) error
 	CreateDimensionScore(ds *model.DimensionScore) error
 	Close() error
 }
 
 type Runner struct {
-	store   Store
-	project *model.Project
-	cfg     *config.Config
-	repos   []model.Repository
-	source  model.Source
+	store          Store
+	project        *model.Project
+	cfg            *config.Config
+	repos          []model.Repository
+	source         model.Source
+	projectSources []model.ProjectSource
 }
 
-func NewFromStore(s Store, projectName string, source model.Source) (*Runner, error) {
+func NewFromStore(s Store, projectName string, source model.Source, projectSources ...model.ProjectSource) (*Runner, error) {
 	project, err := FindOrCreateProject(s, projectName)
 	if err != nil {
 		return nil, err
@@ -46,11 +48,12 @@ func NewFromStore(s Store, projectName string, source model.Source) (*Runner, er
 	}
 
 	return &Runner{
-		store:   s,
-		project: project,
-		cfg:     cfg,
-		repos:   repos,
-		source:  source,
+		store:          s,
+		project:        project,
+		cfg:            cfg,
+		repos:          repos,
+		source:         source,
+		projectSources: projectSources,
 	}, nil
 }
 
@@ -67,7 +70,7 @@ func (r *Runner) Repositories() []model.Repository {
 }
 
 func (r *Runner) Run(ctx context.Context, onProgress collector.ProgressFunc) (*collector.CollectionResult, error) {
-	return collector.Collect(ctx, r.cfg, r.store, r.project, r.repos, r.source, onProgress)
+	return collector.Collect(ctx, r.cfg, r.store, r.project, r.repos, r.source, r.projectSources, onProgress)
 }
 
 func (r *Runner) Close() error {
@@ -110,8 +113,9 @@ func BuildConfigFromDB(s Store, project *model.Project) (*config.Config, error) 
 
 	cfg := &config.Config{
 		Project: config.ProjectConfig{
-			Name:        project.Name,
-			Description: project.Description,
+			Name:               project.Name,
+			Description:        project.Description,
+			DevCycleProjectKey: project.DevCycleProjectKey,
 		},
 		Weights: config.DefaultWeights(),
 	}

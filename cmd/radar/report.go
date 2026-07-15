@@ -65,7 +65,14 @@ func runReport(cmd *cobra.Command, args []string) error {
 
 	if len(reports) == 0 {
 		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "No metrics collected. Run 'radar collect' first.\n")
+		return nil
 	}
+
+	projectReport, err := report.BuildProjectReportFromDB(s, *project, cfg)
+	if err != nil {
+		return fmt.Errorf("building project report: %w", err)
+	}
+	fmt.Println(formatter.Format(projectReport))
 
 	for _, r := range reports {
 		fmt.Println(formatter.Format(r))
