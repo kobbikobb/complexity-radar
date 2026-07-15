@@ -616,25 +616,27 @@ type testError struct {
 
 func (e *testError) Error() string { return e.msg }
 
-type stubStore struct {
+type unknownMetricStore struct {
 	metrics []model.Metric
 	types   map[int64]model.MetricType
 }
 
-func (s *stubStore) ListRepositories(_ int64) ([]model.Repository, error) {
+func (s *unknownMetricStore) ListRepositories(_ int64) ([]model.Repository, error) {
 	return []model.Repository{{ID: 1, URL: "github.com/org/repo"}}, nil
 }
-func (s *stubStore) GetMetricsByRepository(_ int64) ([]model.Metric, error) { return s.metrics, nil }
-func (s *stubStore) GetMetricTypeByID(id int64) (*model.MetricType, error) {
+func (s *unknownMetricStore) GetMetricsByRepository(_ int64) ([]model.Metric, error) {
+	return s.metrics, nil
+}
+func (s *unknownMetricStore) GetMetricTypeByID(id int64) (*model.MetricType, error) {
 	mt := s.types[id]
 	return &mt, nil
 }
-func (s *stubStore) GetMetricTypeByName(_ model.MetricTypeName) (*model.MetricType, error) {
+func (s *unknownMetricStore) GetMetricTypeByName(_ model.MetricTypeName) (*model.MetricType, error) {
 	return nil, nil
 }
 
 func TestBuildFromDBExcludesUnknownMetricTypes(t *testing.T) {
-	stub := &stubStore{
+	stub := &unknownMetricStore{
 		metrics: []model.Metric{
 			{RepositoryID: 1, MetricTypeID: 1, Value: 26},
 			{RepositoryID: 1, MetricTypeID: 2, Value: 960355}, // stale code_loc, removed from model
