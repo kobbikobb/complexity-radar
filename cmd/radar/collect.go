@@ -38,7 +38,7 @@ func runCollect(cmd *cobra.Command, args []string) error {
 	}
 	defer func() { _ = s.Close() }()
 
-	r, err := runner.NewFromStore(s, projectName, sources.Default())
+	r, err := runner.NewFromStore(s, projectName, sources.Default(), sources.DefaultProject()...)
 	if err != nil {
 		return err
 	}

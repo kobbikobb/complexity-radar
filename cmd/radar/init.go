@@ -80,7 +80,18 @@ func promptProject(reader *bufio.Reader, s *store.Store) (*model.Project, error)
 		if choice != "" {
 			var idx int
 			if _, err := fmt.Sscanf(choice, "%d", &idx); err == nil && idx >= 1 && idx <= len(existing) {
-				return &existing[idx-1], nil
+				selected := &existing[idx-1]
+				key, err := promptDevCycleKey(reader, selected.DevCycleProjectKey)
+				if err != nil {
+					return nil, err
+				}
+				if key != selected.DevCycleProjectKey {
+					selected.DevCycleProjectKey = key
+					if err := s.UpdateProject(selected); err != nil {
+						return nil, fmt.Errorf("updating project: %w", err)
+					}
+				}
+				return selected, nil
 			}
 			fmt.Println("Invalid selection, creating new project.")
 		}
@@ -100,9 +111,15 @@ func promptProject(reader *bufio.Reader, s *store.Store) (*model.Project, error)
 		return nil, err
 	}
 
+	devCycleKey, err := promptDevCycleKey(reader, "")
+	if err != nil {
+		return nil, err
+	}
+
 	project := &model.Project{
-		Name:        name,
-		Description: description,
+		Name:               name,
+		Description:        description,
+		DevCycleProjectKey: devCycleKey,
 	}
 	if err := s.CreateProject(project); err != nil {
 		return nil, fmt.Errorf("creating project: %w", err)
@@ -211,11 +228,6 @@ func addRepository(reader *bufio.Reader, s *store.Store, projectID int64) (*mode
 		return nil, err
 	}
 
-	devCycleKey, err := promptDevCycleKey(reader, "")
-	if err != nil {
-		return nil, err
-	}
-
 	repo := &model.Repository{
 		ProjectID:          projectID,
 		URL:                url,
@@ -223,7 +235,6 @@ func addRepository(reader *bufio.Reader, s *store.Store, projectID int64) (*mode
 		DeployDetection:    method,
 		IncludePrereleases: includePrereleases,
 		TagPrefix:          tagPrefix,
-		DevCycleProjectKey: devCycleKey,
 	}
 	if err := s.CreateRepository(repo); err != nil {
 		return nil, fmt.Errorf("creating repository: %w", err)
@@ -264,17 +275,11 @@ func editRepository(reader *bufio.Reader, s *store.Store, repo *model.Repository
 		return nil, err
 	}
 
-	devCycleKey, err := promptDevCycleKey(reader, repo.DevCycleProjectKey)
-	if err != nil {
-		return nil, err
-	}
-
 	repo.URL = url
 	repo.Branch = branch
 	repo.DeployDetection = method
 	repo.IncludePrereleases = includePrereleases
 	repo.TagPrefix = tagPrefix
-	repo.DevCycleProjectKey = devCycleKey
 
 	if err := s.UpdateRepository(repo); err != nil {
 		return nil, fmt.Errorf("updating repository: %w", err)
@@ -285,7 +290,7 @@ func editRepository(reader *bufio.Reader, s *store.Store, repo *model.Repository
 }
 
 func promptDevCycleKey(reader *bufio.Reader, current string) (string, error) {
-	track, err := promptYesNo(reader, "Track DevCycle feature-flag debt for this repo?", current != "")
+	track, err := promptYesNo(reader, "Track DevCycle feature-flag debt for this project?", current != "")
 	if err != nil {
 		return "", err
 	}

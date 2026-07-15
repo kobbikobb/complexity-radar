@@ -120,8 +120,8 @@ func (s *Store) migrate() error {
 func (s *Store) CreateProject(p *model.Project) error {
 	now := time.Now().UTC().Format(time.RFC3339)
 	result, err := s.db.Exec(
-		"INSERT INTO projects (name, description, created_at, updated_at) VALUES (?, ?, ?, ?)",
-		p.Name, p.Description, now, now,
+		"INSERT INTO projects (name, description, devcycle_project_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+		p.Name, p.Description, p.DevCycleProjectKey, now, now,
 	)
 	if err != nil {
 		return fmt.Errorf("inserting project: %w", err)
@@ -142,8 +142,8 @@ func (s *Store) GetProjectByName(name string) (*model.Project, error) {
 	p := &model.Project{}
 	var createdAt, updatedAt string
 	err := s.db.QueryRow(
-		"SELECT id, name, description, created_at, updated_at FROM projects WHERE name = ?", name,
-	).Scan(&p.ID, &p.Name, &p.Description, &createdAt, &updatedAt)
+		"SELECT id, name, description, devcycle_project_key, created_at, updated_at FROM projects WHERE name = ?", name,
+	).Scan(&p.ID, &p.Name, &p.Description, &p.DevCycleProjectKey, &createdAt, &updatedAt)
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("project %q: %w", name, ErrNotFound)
 	}
@@ -166,8 +166,8 @@ func (s *Store) GetProject(id int64) (*model.Project, error) {
 	p := &model.Project{}
 	var createdAt, updatedAt string
 	err := s.db.QueryRow(
-		"SELECT id, name, description, created_at, updated_at FROM projects WHERE id = ?", id,
-	).Scan(&p.ID, &p.Name, &p.Description, &createdAt, &updatedAt)
+		"SELECT id, name, description, devcycle_project_key, created_at, updated_at FROM projects WHERE id = ?", id,
+	).Scan(&p.ID, &p.Name, &p.Description, &p.DevCycleProjectKey, &createdAt, &updatedAt)
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("project %d not found", id)
 	}
@@ -187,7 +187,7 @@ func (s *Store) GetProject(id int64) (*model.Project, error) {
 }
 
 func (s *Store) ListProjects() ([]model.Project, error) {
-	rows, err := s.db.Query("SELECT id, name, description, created_at, updated_at FROM projects ORDER BY id")
+	rows, err := s.db.Query("SELECT id, name, description, devcycle_project_key, created_at, updated_at FROM projects ORDER BY id")
 	if err != nil {
 		return nil, fmt.Errorf("querying projects: %w", err)
 	}
@@ -197,7 +197,7 @@ func (s *Store) ListProjects() ([]model.Project, error) {
 	for rows.Next() {
 		var p model.Project
 		var createdAt, updatedAt string
-		if err := rows.Scan(&p.ID, &p.Name, &p.Description, &createdAt, &updatedAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.Name, &p.Description, &p.DevCycleProjectKey, &createdAt, &updatedAt); err != nil {
 			return nil, fmt.Errorf("scanning project: %w", err)
 		}
 		p.CreatedAt, err = time.Parse(time.RFC3339, createdAt)
@@ -217,8 +217,8 @@ func (s *Store) ListProjects() ([]model.Project, error) {
 func (s *Store) UpdateProject(p *model.Project) error {
 	now := time.Now().UTC().Format(time.RFC3339)
 	result, err := s.db.Exec(
-		"UPDATE projects SET name = ?, description = ?, updated_at = ? WHERE id = ?",
-		p.Name, p.Description, now, p.ID,
+		"UPDATE projects SET name = ?, description = ?, devcycle_project_key = ?, updated_at = ? WHERE id = ?",
+		p.Name, p.Description, p.DevCycleProjectKey, now, p.ID,
 	)
 	if err != nil {
 		return fmt.Errorf("updating project: %w", err)
@@ -253,8 +253,8 @@ func (s *Store) CreateRepository(r *model.Repository) error {
 		r.DeployDetection = config.DeployDetectionReleases
 	}
 	result, err := s.db.Exec(
-		"INSERT INTO repositories (project_id, url, branch, gitops_repo_url, deploy_detection, include_prereleases, tag_prefix, devcycle_project_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		r.ProjectID, r.URL, r.Branch, r.GitopsRepoURL, r.DeployDetection, r.IncludePrereleases, r.TagPrefix, r.DevCycleProjectKey, now, now,
+		"INSERT INTO repositories (project_id, url, branch, gitops_repo_url, deploy_detection, include_prereleases, tag_prefix, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		r.ProjectID, r.URL, r.Branch, r.GitopsRepoURL, r.DeployDetection, r.IncludePrereleases, r.TagPrefix, now, now,
 	)
 	if err != nil {
 		return fmt.Errorf("inserting repository: %w", err)
@@ -277,9 +277,9 @@ func (s *Store) FindOrCreateRepository(projectID int64, url, branch string) (*mo
 	r := &model.Repository{}
 	var createdAt, updatedAt string
 	err := s.db.QueryRow(
-		"SELECT id, project_id, url, branch, gitops_repo_url, deploy_detection, include_prereleases, tag_prefix, devcycle_project_key, created_at, updated_at FROM repositories WHERE project_id = ? AND url = ?",
+		"SELECT id, project_id, url, branch, gitops_repo_url, deploy_detection, include_prereleases, tag_prefix, created_at, updated_at FROM repositories WHERE project_id = ? AND url = ?",
 		projectID, url,
-	).Scan(&r.ID, &r.ProjectID, &r.URL, &r.Branch, &r.GitopsRepoURL, &r.DeployDetection, &r.IncludePrereleases, &r.TagPrefix, &r.DevCycleProjectKey, &createdAt, &updatedAt)
+	).Scan(&r.ID, &r.ProjectID, &r.URL, &r.Branch, &r.GitopsRepoURL, &r.DeployDetection, &r.IncludePrereleases, &r.TagPrefix, &createdAt, &updatedAt)
 	if err == nil {
 		r.CreatedAt, err = time.Parse(time.RFC3339, createdAt)
 		if err != nil {
@@ -323,8 +323,8 @@ func (s *Store) GetRepository(id int64) (*model.Repository, error) {
 	r := &model.Repository{}
 	var createdAt, updatedAt string
 	err := s.db.QueryRow(
-		"SELECT id, project_id, url, branch, gitops_repo_url, deploy_detection, include_prereleases, tag_prefix, devcycle_project_key, created_at, updated_at FROM repositories WHERE id = ?", id,
-	).Scan(&r.ID, &r.ProjectID, &r.URL, &r.Branch, &r.GitopsRepoURL, &r.DeployDetection, &r.IncludePrereleases, &r.TagPrefix, &r.DevCycleProjectKey, &createdAt, &updatedAt)
+		"SELECT id, project_id, url, branch, gitops_repo_url, deploy_detection, include_prereleases, tag_prefix, created_at, updated_at FROM repositories WHERE id = ?", id,
+	).Scan(&r.ID, &r.ProjectID, &r.URL, &r.Branch, &r.GitopsRepoURL, &r.DeployDetection, &r.IncludePrereleases, &r.TagPrefix, &createdAt, &updatedAt)
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("repository %d not found", id)
 	}
@@ -345,7 +345,7 @@ func (s *Store) GetRepository(id int64) (*model.Repository, error) {
 
 func (s *Store) ListRepositories(projectID int64) ([]model.Repository, error) {
 	rows, err := s.db.Query(
-		"SELECT id, project_id, url, branch, gitops_repo_url, deploy_detection, include_prereleases, tag_prefix, devcycle_project_key, created_at, updated_at FROM repositories WHERE project_id = ? ORDER BY id",
+		"SELECT id, project_id, url, branch, gitops_repo_url, deploy_detection, include_prereleases, tag_prefix, created_at, updated_at FROM repositories WHERE project_id = ? ORDER BY id",
 		projectID,
 	)
 	if err != nil {
@@ -357,7 +357,7 @@ func (s *Store) ListRepositories(projectID int64) ([]model.Repository, error) {
 	for rows.Next() {
 		var r model.Repository
 		var createdAt, updatedAt string
-		if err := rows.Scan(&r.ID, &r.ProjectID, &r.URL, &r.Branch, &r.GitopsRepoURL, &r.DeployDetection, &r.IncludePrereleases, &r.TagPrefix, &r.DevCycleProjectKey, &createdAt, &updatedAt); err != nil {
+		if err := rows.Scan(&r.ID, &r.ProjectID, &r.URL, &r.Branch, &r.GitopsRepoURL, &r.DeployDetection, &r.IncludePrereleases, &r.TagPrefix, &createdAt, &updatedAt); err != nil {
 			return nil, fmt.Errorf("scanning repository: %w", err)
 		}
 		r.CreatedAt, err = time.Parse(time.RFC3339, createdAt)
@@ -380,8 +380,8 @@ func (s *Store) UpdateRepository(r *model.Repository) error {
 		r.DeployDetection = config.DeployDetectionReleases
 	}
 	result, err := s.db.Exec(
-		"UPDATE repositories SET url = ?, branch = ?, gitops_repo_url = ?, deploy_detection = ?, include_prereleases = ?, tag_prefix = ?, devcycle_project_key = ?, updated_at = ? WHERE id = ?",
-		r.URL, r.Branch, r.GitopsRepoURL, r.DeployDetection, r.IncludePrereleases, r.TagPrefix, r.DevCycleProjectKey, now, r.ID,
+		"UPDATE repositories SET url = ?, branch = ?, gitops_repo_url = ?, deploy_detection = ?, include_prereleases = ?, tag_prefix = ?, updated_at = ? WHERE id = ?",
+		r.URL, r.Branch, r.GitopsRepoURL, r.DeployDetection, r.IncludePrereleases, r.TagPrefix, now, r.ID,
 	)
 	if err != nil {
 		return fmt.Errorf("updating repository: %w", err)
@@ -498,6 +498,53 @@ func (s *Store) GetMetricsByRepository(repoID int64) ([]model.Metric, error) {
 		var collectedAt string
 		if err := rows.Scan(&m.ID, &m.RepositoryID, &m.MetricTypeID, &m.Value, &collectedAt); err != nil {
 			return nil, fmt.Errorf("scanning metric: %w", err)
+		}
+		m.CollectedAt, err = time.Parse(time.RFC3339, collectedAt)
+		if err != nil {
+			return nil, fmt.Errorf("parsing collected_at: %w", err)
+		}
+		metrics = append(metrics, m)
+	}
+
+	return metrics, rows.Err()
+}
+
+func (s *Store) CreateProjectMetric(m *model.ProjectMetric) error {
+	now := time.Now().UTC().Format(time.RFC3339)
+	result, err := s.db.Exec(
+		"INSERT INTO project_metrics (project_id, metric_type_id, value, collected_at) VALUES (?, ?, ?, ?)",
+		m.ProjectID, m.MetricTypeID, m.Value, now,
+	)
+	if err != nil {
+		return fmt.Errorf("inserting project metric: %w", err)
+	}
+
+	id, err := result.LastInsertId()
+	if err != nil {
+		return fmt.Errorf("getting project metric id: %w", err)
+	}
+
+	m.ID = id
+	m.CollectedAt, _ = time.Parse(time.RFC3339, now)
+	return nil
+}
+
+func (s *Store) GetProjectMetrics(projectID int64) ([]model.ProjectMetric, error) {
+	rows, err := s.db.Query(
+		"SELECT id, project_id, metric_type_id, value, collected_at FROM project_metrics WHERE project_id = ? ORDER BY id",
+		projectID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("querying project metrics: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var metrics []model.ProjectMetric
+	for rows.Next() {
+		var m model.ProjectMetric
+		var collectedAt string
+		if err := rows.Scan(&m.ID, &m.ProjectID, &m.MetricTypeID, &m.Value, &collectedAt); err != nil {
+			return nil, fmt.Errorf("scanning project metric: %w", err)
 		}
 		m.CollectedAt, err = time.Parse(time.RFC3339, collectedAt)
 		if err != nil {

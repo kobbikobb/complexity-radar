@@ -17,6 +17,7 @@ type Store interface {
 	GetMetricTypeByID(id int64) (*model.MetricType, error)
 	ListRepositories(projectID int64) ([]model.Repository, error)
 	GetMetricsByRepository(repoID int64) ([]model.Metric, error)
+	GetProjectMetrics(projectID int64) ([]model.ProjectMetric, error)
 }
 
 func BuildFromResult(result collector.CollectionResult, cfg *config.Config) []terminal.Report {
@@ -37,6 +38,105 @@ func BuildFromResult(result collector.CollectionResult, cfg *config.Config) []te
 		))
 	}
 	return reports
+}
+
+// BuildProjectReport builds the project-level rollup: each repo metric is
+// averaged across repos (skipping no-data sentinels), project-scoped metrics
+// like feature_flag_debt are added directly, and the combined bag is scored so
+// project-level metrics fold into the project's overall score.
+func BuildProjectReport(result collector.CollectionResult, cfg *config.Config) terminal.Report {
+	typesByName := buildMetricTypeMaps()
+	weights := scorer.WeightsFromConfig(cfg.Weights)
+
+	var repoSets []map[model.MetricTypeName]float64
+	var collectedAt time.Time
+	for _, rr := range result.Repositories {
+		repoSets = append(repoSets, rr.Metrics)
+		if rr.CollectedAt.After(collectedAt) {
+			collectedAt = rr.CollectedAt
+		}
+	}
+
+	bag := aggregateMetrics(repoSets, result.ProjectMetrics)
+	return buildProjectReportView(result.Project, cfg, weights, bag, collectedAt, result.ProjectErrors, typesByName)
+}
+
+// BuildProjectReportFromDB builds the project rollup from stored metrics.
+func BuildProjectReportFromDB(store Store, project model.Project, cfg *config.Config) (terminal.Report, error) {
+	typesByName := buildMetricTypeMaps()
+	weights := scorer.WeightsFromConfig(cfg.Weights)
+
+	repos, err := store.ListRepositories(project.ID)
+	if err != nil {
+		return terminal.Report{}, fmt.Errorf("listing repositories: %w", err)
+	}
+
+	var repoSets []map[model.MetricTypeName]float64
+	var collectedAt time.Time
+	for _, repo := range repos {
+		metrics, err := store.GetMetricsByRepository(repo.ID)
+		if err != nil {
+			return terminal.Report{}, fmt.Errorf("getting metrics for %s: %w", repo.URL, err)
+		}
+		raw, _, at := partitionMetrics(store, metrics, typesByName)
+		if len(raw) == 0 {
+			continue
+		}
+		repoSets = append(repoSets, raw)
+		if at.After(collectedAt) {
+			collectedAt = at
+		}
+	}
+
+	projectMetrics, err := store.GetProjectMetrics(project.ID)
+	if err != nil {
+		return terminal.Report{}, fmt.Errorf("getting project metrics: %w", err)
+	}
+	projMap := make(map[model.MetricTypeName]float64)
+	for _, pm := range projectMetrics {
+		mt, err := store.GetMetricTypeByID(pm.MetricTypeID)
+		if err != nil {
+			continue
+		}
+		projMap[mt.Name] = pm.Value
+		if pm.CollectedAt.After(collectedAt) {
+			collectedAt = pm.CollectedAt
+		}
+	}
+
+	bag := aggregateMetrics(repoSets, projMap)
+	return buildProjectReportView(project, cfg, weights, bag, collectedAt, nil, typesByName), nil
+}
+
+func aggregateMetrics(repoSets []map[model.MetricTypeName]float64, projectMetrics map[model.MetricTypeName]float64) map[model.MetricTypeName]float64 {
+	sums := make(map[model.MetricTypeName]float64)
+	counts := make(map[model.MetricTypeName]int)
+	for _, set := range repoSets {
+		for name, v := range set {
+			if v < 0 {
+				continue
+			}
+			sums[name] += v
+			counts[name]++
+		}
+	}
+
+	bag := make(map[model.MetricTypeName]float64, len(sums)+len(projectMetrics))
+	for name, sum := range sums {
+		bag[name] = sum / float64(counts[name])
+	}
+	for name, v := range projectMetrics {
+		bag[name] = v
+	}
+	return bag
+}
+
+func buildProjectReportView(project model.Project, cfg *config.Config, weights map[model.Dimension]float64, bag map[model.MetricTypeName]float64, collectedAt time.Time, errs []string, typesByName map[model.MetricTypeName]model.MetricType) terminal.Report {
+	scoreResult := scorer.Score(bag, weights)
+	report := buildRepoReport(project.Name, project.Description, scoreResult.Overall, scoreResult.Dimensions, bag, collectedAt, cfg.Weights, 0, false, nil, typesByName)
+	report.Aggregate = true
+	report.Errors = errs
+	return report
 }
 
 func BuildFromDB(store Store, project model.Project, cfg *config.Config, warn io.Writer) ([]terminal.Report, error) {

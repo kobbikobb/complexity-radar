@@ -6,32 +6,42 @@
 
 ## Context
 
-Until now every metric came from GitHub, reachable for any configured repo with no
-extra setup. Some metrics need an external vendor that only some users have and that
-requires credentials — the first being DevCycle for feature-flag debt. We need a way
-to add such sources without forcing setup on users who don't use the vendor, and
-without changing the collector each time (see ADR 0002).
+Until now every metric came from GitHub, per repo, reachable with no extra setup.
+Some metrics need an external vendor that only some users have, requires
+credentials, and is scoped to a whole project rather than a repo — the first
+being DevCycle feature-flag debt, where flags belong to a DevCycle project, not a
+git repo. We need to add such sources without forcing setup on non-users and
+without changing the collector each time (ADR 0002), and to surface a
+project-scoped metric even though every metric so far has been repo-scoped.
 
 ## Decision
 
-- **Composite source.** `sources.Default()` returns a `Multi` that merges all sources
-  (`github`, `devcycle`, …). The runner and collector still receive a single
-  `model.Source`; `Multi` is the one place new vendors are registered.
-- **Self-skipping, opt-in.** A vendor source is always in the composite but returns
-  `(nil, nil)` from `Collect` when it isn't configured for a repo. Opt-in is a
-  graceful no-op, never an error, so registration stays static.
-- **Per-repo, non-secret config in the DB; secrets in env.** The DevCycle project key
-  is a `repositories` column set by the init wizard. Credentials
-  (`DEVCYCLE_CLIENT_ID` / `DEVCYCLE_CLIENT_SECRET`) come from the environment, never
-  the DB — matching the existing `gh`-CLI auth idiom.
-- **A configured vendor's failure fails that repo's collection**, same as a GitHub
-  failure. There is no partial-success machinery.
+- **Two source axes.** `model.Source` stays repo-scoped (`Collect(repo)`); a new
+  `model.ProjectSource` is project-scoped (`CollectProject(project)`).
+  `sources.Default()` composes repo sources, `sources.DefaultProject()` composes
+  project sources — each the single place its kind of vendor is registered.
+- **Self-skipping, opt-in.** A vendor source is always registered but returns
+  `(nil, nil)` when unconfigured, so opt-in is a graceful no-op, never an error.
+- **Project-scoped config in the DB; secrets in env.** The DevCycle project key is
+  a `projects` column set by the init wizard. Credentials (`DEVCYCLE_CLIENT_ID` /
+  `DEVCYCLE_CLIENT_SECRET`) come from the environment, never the DB — matching the
+  existing `gh`-CLI auth idiom.
+- **Project-level scoring via a rollup report.** Project metrics are stored in a
+  `project_metrics` table. The report layer builds a project rollup: each repo
+  metric is averaged across repos (skipping no-data sentinels) and project metrics
+  are added directly, then the combined bag is scored by the existing scorer, so
+  `feature_flag_debt` folds into the project's Code dimension and overall score.
+- **A configured vendor's failure is recorded, not fatal.** Project-source errors
+  are collected into the result's `ProjectErrors` and shown; they don't abort the
+  run.
 
 ## Consequences
 
-- New vendors follow the DevCycle pattern: a package implementing `Source` that
-  self-skips when unconfigured, plus one line in `sources.Default()`.
+- New repo vendors implement `Source` + one line in `Default()`; new project
+  vendors implement `ProjectSource` + one line in `DefaultProject()`.
 - Non-users see no behavior change and need no credentials.
 - Vendor secrets never touch the database.
-- A vendor outage can fail collection for repos that opted in; acceptable for now,
-  revisit if partial-success reporting is wanted.
+- Radar gains its first project-level scored surface (the rollup report), shown
+  above the per-repo reports.
+- Averaging repo metrics for the rollup is a deliberate simplification; revisit if
+  a more principled cross-repo aggregation is wanted.

@@ -13,6 +13,7 @@ import (
 type MetricStore interface {
 	GetMetricTypeByName(name model.MetricTypeName) (*model.MetricType, error)
 	CreateMetric(m *model.Metric) error
+	CreateProjectMetric(m *model.ProjectMetric) error
 	CreateDimensionScore(ds *model.DimensionScore) error
 }
 
@@ -26,8 +27,10 @@ type RepositoryResult struct {
 }
 
 type CollectionResult struct {
-	Project      model.Project
-	Repositories []RepositoryResult
+	Project        model.Project
+	Repositories   []RepositoryResult
+	ProjectMetrics map[model.MetricTypeName]float64
+	ProjectErrors  []string
 }
 
 // ProgressEvent describes a collection progress update.
@@ -47,12 +50,12 @@ type ProgressFunc func(ProgressEvent)
 // noopProgress does nothing when no progress function is provided.
 func noopProgress(ProgressEvent) {}
 
-func Collect(ctx context.Context, cfg *config.Config, s MetricStore, project *model.Project, repos []model.Repository, src model.Source, onProgress ProgressFunc) (*CollectionResult, error) {
+func Collect(ctx context.Context, cfg *config.Config, s MetricStore, project *model.Project, repos []model.Repository, src model.Source, projectSources []model.ProjectSource, onProgress ProgressFunc) (*CollectionResult, error) {
 	if onProgress == nil {
 		onProgress = noopProgress
 	}
 
-	result := &CollectionResult{Project: *project}
+	result := &CollectionResult{Project: *project, ProjectMetrics: make(map[model.MetricTypeName]float64)}
 
 	weights := scorer.WeightsFromConfig(cfg.Weights)
 	supported := src.SupportedMetrics()
@@ -134,5 +137,31 @@ func Collect(ctx context.Context, cfg *config.Config, s MetricStore, project *mo
 		result.Repositories = append(result.Repositories, repoResult)
 	}
 
+	collectProjectMetrics(ctx, s, project, projectSources, result, onProgress)
+
 	return result, nil
+}
+
+func collectProjectMetrics(ctx context.Context, s MetricStore, project *model.Project, sources []model.ProjectSource, result *CollectionResult, onProgress ProgressFunc) {
+	for _, src := range sources {
+		metrics, err := src.CollectProject(ctx, *project)
+		if err != nil {
+			result.ProjectErrors = append(result.ProjectErrors, fmt.Sprintf("%s: %v", src.Name(), err))
+			continue
+		}
+		for _, m := range metrics {
+			mt, err := s.GetMetricTypeByName(m.Type)
+			if err != nil {
+				result.ProjectErrors = append(result.ProjectErrors, fmt.Sprintf("metric type %s: %v", m.Type, err))
+				continue
+			}
+			pm := &model.ProjectMetric{ProjectID: project.ID, MetricTypeID: mt.ID, Value: m.Value}
+			if err := s.CreateProjectMetric(pm); err != nil {
+				result.ProjectErrors = append(result.ProjectErrors, fmt.Sprintf("storing project metric %s: %v", m.Type, err))
+				continue
+			}
+			result.ProjectMetrics[m.Type] = m.Value
+			onProgress(ProgressEvent{Message: fmt.Sprintf("  Storing project %s = %.1f", m.Type, m.Value)})
+		}
+	}
 }

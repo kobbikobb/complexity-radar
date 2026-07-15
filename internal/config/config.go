@@ -13,8 +13,9 @@ type Config struct {
 }
 
 type ProjectConfig struct {
-	Name        string
-	Description string
+	Name               string
+	Description        string
+	DevCycleProjectKey string
 }
 
 type RepositoryConfig struct {

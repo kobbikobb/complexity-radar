@@ -20,6 +20,7 @@ type Report struct {
 	Errors             []string
 	HasTrend           bool
 	OverallDelta       float64
+	Aggregate          bool
 }
 
 type DimensionReport struct {
@@ -153,6 +154,9 @@ func (f *TerminalFormatter) Format(report Report) string {
 	b.WriteString("═══════════════════════════════════════════════════\n")
 	b.WriteString("\n")
 	fmt.Fprintf(&b, "  Project: %s\n", report.ProjectName)
+	if report.Aggregate {
+		b.WriteString("  (project rollup — all repositories)\n")
+	}
 	if report.ProjectDescription != "" {
 		fmt.Fprintf(&b, "  %s\n", report.ProjectDescription)
 	}

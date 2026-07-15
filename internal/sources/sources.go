@@ -10,11 +10,17 @@ import (
 	"github.com/kobbikobb/complexity-radar/internal/sources/github"
 )
 
-// Default returns the composite of every source radar knows about. This is the
-// single place new vendor sources get registered; opt-in sources self-skip when
-// unconfigured, so listing one here has no effect until a user configures it.
+// Default returns the composite of every per-repo source radar knows about.
+// This is the single place new repo-scoped vendor sources get registered.
 func Default() model.Source {
-	return Multi{github.NewSource(), devcycle.NewSource()}
+	return Multi{github.NewSource()}
+}
+
+// DefaultProject returns every project-scoped source. Opt-in sources self-skip
+// when unconfigured, so listing one here has no effect until a user configures
+// it; this is the single place new project-scoped vendors get registered.
+func DefaultProject() []model.ProjectSource {
+	return []model.ProjectSource{devcycle.NewSource()}
 }
 
 // Multi merges several sources into one, concatenating their metrics and

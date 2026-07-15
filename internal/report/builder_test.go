@@ -13,6 +13,35 @@ import (
 	"github.com/kobbikobb/complexity-radar/internal/store"
 )
 
+func TestBuildProjectReportFoldsProjectMetrics(t *testing.T) {
+	// Arrange
+	result := collector.CollectionResult{
+		Project: model.Project{Name: "proj"},
+		Repositories: []collector.RepositoryResult{
+			{Metrics: map[model.MetricTypeName]float64{model.MetricTypeDependencyCount: 4}},
+			{Metrics: map[model.MetricTypeName]float64{model.MetricTypeDependencyCount: 8}},
+		},
+		ProjectMetrics: map[model.MetricTypeName]float64{model.MetricTypeFeatureFlagDebt: 30},
+	}
+
+	// Act
+	report := BuildProjectReport(result, testConfig())
+
+	// Assert
+	if !report.Aggregate {
+		t.Error("expected Aggregate=true")
+	}
+	codeCount := -1
+	for _, d := range report.Dimensions {
+		if d.Dimension == model.DimensionCode {
+			codeCount = d.MetricCount
+		}
+	}
+	if codeCount != 2 {
+		t.Fatalf("expected Code to score dependency_count (mean of 4,8) + feature_flag_debt = 2 metrics, got %d", codeCount)
+	}
+}
+
 func newTestStore(t *testing.T) *store.Store {
 	t.Helper()
 	s, err := store.New(":memory:")
@@ -294,6 +323,47 @@ func TestBuildFromDBProducesReports(t *testing.T) {
 	}
 	if rep.Metrics[0].Name != model.MetricTypeSecurityVulnerabilities {
 		t.Errorf("metric name = %q, want %q", rep.Metrics[0].Name, model.MetricTypeSecurityVulnerabilities)
+	}
+}
+
+func TestBuildProjectReportFromDBIncludesProjectMetrics(t *testing.T) {
+	// Arrange
+	s := newTestStore(t)
+	p := &model.Project{Name: "Rollup"}
+	if err := s.CreateProject(p); err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	r := &model.Repository{ProjectID: p.ID, URL: "github.com/org/repo", Branch: "main"}
+	if err := s.CreateRepository(r); err != nil {
+		t.Fatalf("CreateRepository: %v", err)
+	}
+	depType, _ := s.GetMetricTypeByName(model.MetricTypeDependencyCount)
+	if err := s.CreateMetric(&model.Metric{RepositoryID: r.ID, MetricTypeID: depType.ID, Value: 6}); err != nil {
+		t.Fatalf("CreateMetric: %v", err)
+	}
+	flagType, _ := s.GetMetricTypeByName(model.MetricTypeFeatureFlagDebt)
+	if err := s.CreateProjectMetric(&model.ProjectMetric{ProjectID: p.ID, MetricTypeID: flagType.ID, Value: 12}); err != nil {
+		t.Fatalf("CreateProjectMetric: %v", err)
+	}
+
+	// Act
+	report, err := BuildProjectReportFromDB(s, *p, testConfig())
+	if err != nil {
+		t.Fatalf("BuildProjectReportFromDB: %v", err)
+	}
+
+	// Assert
+	if !report.Aggregate {
+		t.Error("expected Aggregate=true")
+	}
+	found := false
+	for _, m := range report.Metrics {
+		if m.Name == model.MetricTypeFeatureFlagDebt {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("feature_flag_debt missing from project rollup")
 	}
 }
 
@@ -583,6 +653,10 @@ func (s *stubStore) GetMetricsByRepository(_ int64) ([]model.Metric, error) {
 	return s.metrics, nil
 }
 
+func (s *stubStore) GetProjectMetrics(_ int64) ([]model.ProjectMetric, error) {
+	return nil, nil
+}
+
 type failingStore struct {
 	listErr    bool
 	metricsErr bool
@@ -610,6 +684,10 @@ func (f *failingStore) GetMetricsByRepository(_ int64) ([]model.Metric, error) {
 	return nil, nil
 }
 
+func (f *failingStore) GetProjectMetrics(_ int64) ([]model.ProjectMetric, error) {
+	return nil, nil
+}
+
 type testError struct {
 	msg string
 }
@@ -632,6 +710,9 @@ func (s *unknownMetricStore) GetMetricTypeByID(id int64) (*model.MetricType, err
 	return &mt, nil
 }
 func (s *unknownMetricStore) GetMetricTypeByName(_ model.MetricTypeName) (*model.MetricType, error) {
+	return nil, nil
+}
+func (s *unknownMetricStore) GetProjectMetrics(_ int64) ([]model.ProjectMetric, error) {
 	return nil, nil
 }
 

@@ -17,9 +17,9 @@ type FeatureLister interface {
 	ListFeatures(ctx context.Context, projectKey string) ([]Feature, error)
 }
 
-// Source collects feature-flag debt from DevCycle. It is opt-in: unless a
-// repository has a DevCycle project key and the DEVCYCLE_CLIENT_ID /
-// DEVCYCLE_CLIENT_SECRET env vars are set, Collect is a no-op.
+// Source collects feature-flag debt from DevCycle. It is opt-in: unless the
+// project has a DevCycle project key and the DEVCYCLE_CLIENT_ID /
+// DEVCYCLE_CLIENT_SECRET env vars are set, CollectProject is a no-op.
 type Source struct {
 	newClient func(id, secret string) FeatureLister
 }
@@ -43,13 +43,13 @@ func (s *Source) SupportedMetrics() []model.MetricTypeName {
 	return []model.MetricTypeName{model.MetricTypeFeatureFlagDebt}
 }
 
-func (s *Source) Collect(ctx context.Context, repo model.Repository) ([]model.SourceMetric, error) {
+func (s *Source) CollectProject(ctx context.Context, project model.Project) ([]model.SourceMetric, error) {
 	id, secret := os.Getenv("DEVCYCLE_CLIENT_ID"), os.Getenv("DEVCYCLE_CLIENT_SECRET")
-	if repo.DevCycleProjectKey == "" || id == "" || secret == "" {
+	if project.DevCycleProjectKey == "" || id == "" || secret == "" {
 		return nil, nil
 	}
 
-	features, err := s.newClient(id, secret).ListFeatures(ctx, repo.DevCycleProjectKey)
+	features, err := s.newClient(id, secret).ListFeatures(ctx, project.DevCycleProjectKey)
 	if err != nil {
 		return nil, err
 	}
