@@ -211,6 +211,11 @@ func addRepository(reader *bufio.Reader, s *store.Store, projectID int64) (*mode
 		return nil, err
 	}
 
+	devCycleKey, err := promptDevCycleKey(reader, "")
+	if err != nil {
+		return nil, err
+	}
+
 	repo := &model.Repository{
 		ProjectID:          projectID,
 		URL:                url,
@@ -218,6 +223,7 @@ func addRepository(reader *bufio.Reader, s *store.Store, projectID int64) (*mode
 		DeployDetection:    method,
 		IncludePrereleases: includePrereleases,
 		TagPrefix:          tagPrefix,
+		DevCycleProjectKey: devCycleKey,
 	}
 	if err := s.CreateRepository(repo); err != nil {
 		return nil, fmt.Errorf("creating repository: %w", err)
@@ -258,11 +264,17 @@ func editRepository(reader *bufio.Reader, s *store.Store, repo *model.Repository
 		return nil, err
 	}
 
+	devCycleKey, err := promptDevCycleKey(reader, repo.DevCycleProjectKey)
+	if err != nil {
+		return nil, err
+	}
+
 	repo.URL = url
 	repo.Branch = branch
 	repo.DeployDetection = method
 	repo.IncludePrereleases = includePrereleases
 	repo.TagPrefix = tagPrefix
+	repo.DevCycleProjectKey = devCycleKey
 
 	if err := s.UpdateRepository(repo); err != nil {
 		return nil, fmt.Errorf("updating repository: %w", err)
@@ -270,6 +282,25 @@ func editRepository(reader *bufio.Reader, s *store.Store, repo *model.Repository
 
 	fmt.Printf("Repository updated.\n")
 	return repo, nil
+}
+
+func promptDevCycleKey(reader *bufio.Reader, current string) (string, error) {
+	track, err := promptYesNo(reader, "Track DevCycle feature-flag debt for this repo?", current != "")
+	if err != nil {
+		return "", err
+	}
+	if !track {
+		return "", nil
+	}
+
+	key, err := prompt(reader, "DevCycle project key", current)
+	if err != nil {
+		return "", err
+	}
+	if key != "" {
+		fmt.Println("Set DEVCYCLE_CLIENT_ID and DEVCYCLE_CLIENT_SECRET in your environment before running 'radar scan'.")
+	}
+	return key, nil
 }
 
 func promptDeployMethod(reader *bufio.Reader, current string) (string, error) {

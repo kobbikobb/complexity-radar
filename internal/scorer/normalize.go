@@ -15,6 +15,7 @@ var normalizers = map[model.MetricTypeName]func(float64) float64{
 	model.MetricTypeDeployTargets:           func(v float64) float64 { return asymptotic(v, 20) },
 	model.MetricTypeDependencyCount:         func(v float64) float64 { return asymptotic(v, 8) },
 	model.MetricTypeDecisionDensity:         func(v float64) float64 { return asymptotic(v, 20) },
+	model.MetricTypeFeatureFlagDebt:         func(v float64) float64 { return asymptotic(v, 15) },
 	model.MetricTypeDeployFrequency: func(v float64) float64 {
 		if v < 0 {
 			return math.NaN()
