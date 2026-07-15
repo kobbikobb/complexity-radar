@@ -4,12 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/kobbikobb/complexity-radar/internal/model"
 )
 
 // devScopeWeight discounts dev-only dependency alerts: they don't ship to prod.
 const devScopeWeight = 0.3
+
+// maxAlertPages limits pagination to avoid fetching thousands of alerts.
+const maxAlertPages = 10
 
 // Vulnerability represents a Dependabot alert from the GitHub API.
 type Vulnerability struct {
@@ -41,14 +45,18 @@ func severityWeight(sev string) float64 {
 }
 
 func (s *Source) collectSecurityVulnerabilities(ctx context.Context, owner, name string) ([]model.SourceMetric, error) {
+	params := map[string]string{
+		"state":    "open",
+		"per_page": "100",
+	}
 	endpoint := fmt.Sprintf("/repos/%s/%s/dependabot/alerts", owner, name)
-	data, err := s.client.Get(ctx, endpoint)
+	data, err := s.client.GetPaginated(ctx, endpoint, params, maxAlertPages)
 	if err != nil {
 		return nil, err
 	}
 
-	var alerts []Vulnerability
-	if err := json.Unmarshal(data, &alerts); err != nil {
+	alerts, err := decodeAlertArray(data)
+	if err != nil {
 		return nil, fmt.Errorf("parsing dependabot alerts: %w", err)
 	}
 
@@ -85,6 +93,8 @@ func (s *Source) collectSecurityVulnerabilities(ctx context.Context, owner, name
 		}
 	}
 
+	// Severity is baked into weightedSum; the per-severity counts below are display-only
+	// (see model.DisplayMetricTypes) to avoid double-counting severity in the score.
 	return []model.SourceMetric{
 		{Type: model.MetricTypeSecurityVulnerabilities, Value: weightedSum},
 		{Type: model.MetricTypeSecurityCritical, Value: float64(critCount)},
@@ -92,4 +102,19 @@ func (s *Source) collectSecurityVulnerabilities(ctx context.Context, owner, name
 		{Type: model.MetricTypeSecurityMedium, Value: float64(medCount)},
 		{Type: model.MetricTypeSecurityLow, Value: float64(lowCount)},
 	}, nil
+}
+
+// decodeAlertArray handles both single-array and merged-array responses from GetPaginated.
+func decodeAlertArray(data json.RawMessage) ([]Vulnerability, error) {
+	s := strings.TrimSpace(string(data))
+
+	if len(s) > 0 && s[0] == '[' {
+		var alerts []Vulnerability
+		if err := json.Unmarshal(data, &alerts); err != nil {
+			return nil, err
+		}
+		return alerts, nil
+	}
+
+	return nil, fmt.Errorf("unexpected alert response format")
 }

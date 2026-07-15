@@ -15,7 +15,7 @@ const (
 	refDeployTargets           = 50.0
 	refDependencyCount         = 1500.0 // total distinct third-party deps (sum across stacks) at which the score bottoms out
 	refDeployFrequency         = 5.0    // weekday deploy = full marks, not CD cadence
-	refCICDComplexity          = 500.0
+	refCICDComplexity          = 100.0  // CI/CD automation maturity (higher is better); ref matches cicd.go's raw cap of 100
 	refSecurityCritical        = 5.0
 	refSecurityHigh            = 10.0
 	refSecurityMedium          = 20.0

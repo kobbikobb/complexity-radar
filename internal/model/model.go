@@ -64,7 +64,7 @@ type MetricType struct {
 
 func MetricTypes() []MetricType {
 	return []MetricType{
-		{Name: MetricTypeSecurityVulnerabilities, Dimension: DimensionSecurity, Unit: "count"},
+		{Name: MetricTypeSecurityVulnerabilities, Dimension: DimensionSecurity, Unit: "weighted"},
 		{Name: MetricTypeDeployFrequency, Dimension: DimensionDelivery, Unit: "per_week"},
 		{Name: MetricTypeBuildSuccessRatio, Dimension: DimensionDelivery, Unit: "ratio"},
 		{Name: MetricTypeBuildTime, Dimension: DimensionDelivery, Unit: "seconds"},
@@ -79,6 +79,8 @@ func MetricTypes() []MetricType {
 }
 
 // DisplayMetricTypes returns metric types used for display only (not scored).
+// Severity is already encoded in the scored security_vulnerabilities weighted sum;
+// scoring these counts too would double-count severity.
 func DisplayMetricTypes() []MetricType {
 	return []MetricType{
 		{Name: MetricTypeSecurityCritical, Dimension: DimensionSecurity, Unit: "count"},
