@@ -21,7 +21,9 @@ without changing the collector each time (see ADR 0002).
   `(nil, nil)` from `Collect` when it isn't configured for a repo. Opt-in is a
   graceful no-op, never an error, so registration stays static.
 - **Per-repo, non-secret config in the DB; secrets in env.** The DevCycle project key
-  is a `repositories` column set by the init wizard. Credentials
+  is a `repositories` column set by the init wizard. This assumes one DevCycle project
+  per repo; repos sharing a DevCycle project would double-count its flag debt and would
+  need project-level metric handling, which the tool does not have. Credentials
   (`DEVCYCLE_CLIENT_ID` / `DEVCYCLE_CLIENT_SECRET`) come from the environment, never
   the DB — matching the existing `gh`-CLI auth idiom.
 - **A configured vendor's failure fails that repo's collection**, same as a GitHub
