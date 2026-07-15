@@ -20,6 +20,8 @@ type Store interface {
 }
 
 func BuildFromResult(result collector.CollectionResult, cfg *config.Config) []terminal.Report {
+	typesByName := buildMetricTypeMaps()
+
 	reports := make([]terminal.Report, 0, len(result.Repositories))
 	for _, repoResult := range result.Repositories {
 		reports = append(reports, buildRepoReport(
@@ -31,6 +33,7 @@ func BuildFromResult(result collector.CollectionResult, cfg *config.Config) []te
 			repoResult.CollectedAt,
 			cfg.Weights,
 			0, false, nil,
+			typesByName,
 		))
 	}
 	return reports
@@ -38,6 +41,7 @@ func BuildFromResult(result collector.CollectionResult, cfg *config.Config) []te
 
 func BuildFromDB(store Store, project model.Project, cfg *config.Config, warn io.Writer) ([]terminal.Report, error) {
 	weights := scorer.WeightsFromConfig(cfg.Weights)
+	typesByName := buildMetricTypeMaps()
 
 	repos, err := store.ListRepositories(project.ID)
 	if err != nil {
@@ -57,7 +61,7 @@ func BuildFromDB(store Store, project model.Project, cfg *config.Config, warn io
 			continue
 		}
 
-		rawMetrics, prevMetrics, collectedAt := partitionMetrics(store, metrics)
+		rawMetrics, prevMetrics, collectedAt := partitionMetrics(store, metrics, typesByName)
 
 		scoreResult := scorer.Score(rawMetrics, weights)
 
@@ -88,13 +92,14 @@ func BuildFromDB(store Store, project model.Project, cfg *config.Config, warn io
 			overallDelta,
 			hasTrend,
 			dimDeltas,
+			typesByName,
 		))
 	}
 
 	return reports, nil
 }
 
-func buildRepoReport(projectName, projectDesc string, overallScore float64, dimensions []scorer.DimensionResult, rawMetrics map[model.MetricTypeName]float64, collectedAt time.Time, weights config.WeightsConfig, overallDelta float64, hasTrend bool, dimDeltas map[model.Dimension]float64) terminal.Report {
+func buildRepoReport(projectName, projectDesc string, overallScore float64, dimensions []scorer.DimensionResult, rawMetrics map[model.MetricTypeName]float64, collectedAt time.Time, weights config.WeightsConfig, overallDelta float64, hasTrend bool, dimDeltas map[model.Dimension]float64, typesByName map[model.MetricTypeName]model.MetricType) terminal.Report {
 	dimReports := buildDimensionReports(dimensions, weights)
 
 	if dimDeltas != nil {
@@ -105,7 +110,7 @@ func buildRepoReport(projectName, projectDesc string, overallScore float64, dime
 
 	metricReports := make([]terminal.MetricReport, 0, len(rawMetrics))
 	for name, raw := range rawMetrics {
-		mt, ok := metricTypeLookup(name)
+		mt, ok := typesByName[name]
 		if !ok {
 			continue
 		}
@@ -131,7 +136,7 @@ func buildRepoReport(projectName, projectDesc string, overallScore float64, dime
 	}
 }
 
-func partitionMetrics(store Store, metrics []model.Metric) (raw, prev map[model.MetricTypeName]float64, collectedAt time.Time) {
+func partitionMetrics(store Store, metrics []model.Metric, typesByName map[model.MetricTypeName]model.MetricType) (raw, prev map[model.MetricTypeName]float64, collectedAt time.Time) {
 	raw = make(map[model.MetricTypeName]float64)
 	prev = make(map[model.MetricTypeName]float64)
 	for _, m := range metrics {
@@ -139,7 +144,7 @@ func partitionMetrics(store Store, metrics []model.Metric) (raw, prev map[model.
 		if err != nil {
 			continue
 		}
-		if _, ok := metricTypeLookup(mt.Name); !ok {
+		if _, ok := typesByName[mt.Name]; !ok {
 			continue
 		}
 		if v, ok := raw[mt.Name]; ok {
@@ -166,11 +171,13 @@ func buildDimensionReports(dimensions []scorer.DimensionResult, cfg config.Weigh
 	return dimReports
 }
 
-func metricTypeLookup(name model.MetricTypeName) (model.MetricType, bool) {
-	for _, mt := range append(model.MetricTypes(), model.DisplayMetricTypes()...) {
-		if mt.Name == name {
-			return mt, true
-		}
+func buildMetricTypeMaps() map[model.MetricTypeName]model.MetricType {
+	m := make(map[model.MetricTypeName]model.MetricType, 16)
+	for _, mt := range model.MetricTypes() {
+		m[mt.Name] = mt
 	}
-	return model.MetricType{}, false
+	for _, mt := range model.DisplayMetricTypes() {
+		m[mt.Name] = mt
+	}
+	return m
 }
