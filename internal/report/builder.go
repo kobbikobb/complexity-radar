@@ -113,8 +113,8 @@ func BuildFromDB(store Store, project model.Project, cfg *config.Config, warn io
 
 		metricReports := make([]terminal.MetricReport, 0, len(rawMetrics))
 		for name, raw := range rawMetrics {
-			mt, err := store.GetMetricTypeByName(name)
-			if err != nil {
+			mt, ok := metricTypeLookup(name)
+			if !ok {
 				continue
 			}
 			normalized := scorer.NormalizeMetric(name, raw)
