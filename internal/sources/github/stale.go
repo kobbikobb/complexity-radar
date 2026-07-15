@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -27,27 +28,12 @@ type PullRequest struct {
 // maxStalePRPages limits pagination to avoid fetching thousands of PRs.
 const maxStalePRPages = 10
 
-// isBotPR returns true for PRs likely created by bots/agents.
-func isBotPR(pr PullRequest) bool {
-	if pr.User.Type == "Bot" {
-		return true
-	}
-	branch := pr.Head.Ref
-	prefixes := []string{"agent-", "wf_", "dependabot/", "renovate/", "bot/", "merge-bot", "worktree/"}
-	for _, p := range prefixes {
-		if strings.HasPrefix(branch, p) {
-			return true
-		}
-	}
-	return false
-}
-
 func (s *Source) collectStalePRs(ctx context.Context, owner, name string) ([]model.SourceMetric, error) {
 	params := map[string]string{
 		"state":     "open",
 		"per_page":  "100",
 		"sort":      "updated",
-		"direction": "desc",
+		"direction": "asc", // stalest PRs first so the stale tail survives page truncation
 	}
 	endpoint := fmt.Sprintf("/repos/%s/%s/pulls", owner, name)
 	data, err := s.client.GetPaginated(ctx, endpoint, params, maxStalePRPages)
@@ -61,27 +47,40 @@ func (s *Source) collectStalePRs(ctx context.Context, owner, name string) ([]mod
 	}
 
 	now := time.Now()
-	staleThreshold := now.AddDate(0, 0, -14)
-	staleCount := 0
+	var idle7, idle14, idle30, idle60 int
 
 	for _, pr := range prs {
 		if pr.State != "open" {
 			continue
 		}
-		if isBotPR(pr) || pr.Draft {
+		// Bots count: un-actioned dependabot/Snyk dep bumps are real dependency/security debt.
+		if pr.Draft {
 			continue
 		}
 		updated, err := time.Parse(time.RFC3339, pr.UpdatedAt)
 		if err != nil {
 			continue
 		}
-		if updated.Before(staleThreshold) {
-			staleCount++
+		days := now.Sub(updated).Hours() / 24
+		switch {
+		case days >= 60:
+			idle60++
+			fallthrough
+		case days >= 30:
+			idle30++
+			fallthrough
+		case days >= 14:
+			idle14++
+			fallthrough
+		case days >= 7:
+			idle7++
 		}
 	}
 
+	log.Printf("stale PRs by idle days: >=7:%d >=14:%d >=30:%d >=60:%d", idle7, idle14, idle30, idle60)
+
 	return []model.SourceMetric{
-		{Type: model.MetricTypeStalePRs, Value: float64(staleCount)},
+		{Type: model.MetricTypeStalePRs, Value: float64(idle7)},
 	}, nil
 }
 
