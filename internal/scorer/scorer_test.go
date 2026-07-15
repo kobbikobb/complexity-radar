@@ -77,6 +77,9 @@ func TestNormalizeMetricHigherIsBetter(t *testing.T) {
 		{"half refMax deploy_frequency", model.MetricTypeDeployFrequency, 2.5, 50},
 		{"at refMax deploy_frequency", model.MetricTypeDeployFrequency, 5, 100},
 		{"over refMax deploy_frequency clamps to 100", model.MetricTypeDeployFrequency, 10, 100},
+
+		{"zero ci_cd_complexity", model.MetricTypeCICDComplexity, 0, 0},
+		{"at raw cap ci_cd_complexity", model.MetricTypeCICDComplexity, 100, 100},
 	}
 
 	for _, tt := range tests {
@@ -96,9 +99,9 @@ func TestNormalizeMetricClamped(t *testing.T) {
 		min   float64
 		max   float64
 	}{
-		{"low complexity", 10, 0, 40},
-		{"mid complexity", 100, 50, 90},
-		{"high complexity", 300, 60, 100},
+		{"low complexity", 10, 30, 70},
+		{"at raw cap reaches full score", 100, 95, 100},
+		{"over raw cap clamps to 100", 300, 95, 100},
 		{"negative clamps to 0", -10, 0, 0},
 	}
 
