@@ -71,7 +71,7 @@ func TestRender(t *testing.T) {
 		}
 	})
 
-	t.Run("should mark display-only metrics as unscored", func(t *testing.T) {
+	t.Run("should place display-only metrics in a details section", func(t *testing.T) {
 		// Arrange
 		project := sampleReport("my-project", true)
 
@@ -79,6 +79,12 @@ func TestRender(t *testing.T) {
 		out, _ := Render(project, nil)
 
 		// Assert
+		if !strings.Contains(out, "<details") {
+			t.Error("expected a <details> block for display-only metrics")
+		}
+		if !strings.Contains(out, "Raw context (not scored)") {
+			t.Error("expected 'Raw context (not scored)' summary for display-only metrics")
+		}
 		if !strings.Contains(out, "—") {
 			t.Error("expected an em dash for display-only metric score")
 		}

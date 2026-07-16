@@ -141,6 +141,27 @@ const pageTemplate = `<!DOCTYPE html>
     {{end}}
     </tbody>
   </table>
+  {{if .Details}}
+  <details style="margin-top:8px">
+    <summary style="cursor:pointer;color:var(--muted);font-size:.85rem">Raw context (not scored)</summary>
+    <table>
+      <thead><tr><th>Metric</th><th class="num">Raw</th><th>Unit</th><th class="num">Score</th></tr></thead>
+      <tbody>
+      {{range .Details}}
+        <tr>
+          <td>
+            <div class="metric-name" title="{{.Tooltip}}">{{.Name}}</div>
+            {{if .ScoreDef}}<div class="method">{{.ScoreDef}}</div>{{end}}
+          </td>
+          <td class="num">{{.Raw}}</td>
+          <td>{{.Unit}}</td>
+          <td class="num"><span class="pill {{.Band}}">{{.Score}}</span></td>
+        </tr>
+      {{end}}
+      </tbody>
+    </table>
+  </details>
+  {{end}}
   {{end}}
 
   {{if .Errors}}
