@@ -156,6 +156,45 @@ func TestScoringSanityGatePlatformFixture(t *testing.T) {
 	}
 }
 
+// TestSecurityCriticalGatesPlatformGrade takes the same platform fixture plus
+// the open criticals the real run carried, and asserts the critical gate drops
+// security to F and the overall grade below C.
+func TestSecurityCriticalGatesPlatformGrade(t *testing.T) {
+	// Arrange
+	metrics := map[model.MetricTypeName]float64{
+		model.MetricTypeSecurityVulnerabilities: 95.9,
+		model.MetricTypeSecurityCritical:        4,
+		model.MetricTypeStalePRs:                46,
+		model.MetricTypeBuildTime:               365.8,
+		model.MetricTypeDeployFrequency:         5,
+		model.MetricTypeBuildSuccessRatio:       1.0,
+		model.MetricTypeDecisionDensity:         18.4,
+		model.MetricTypeDependencyCount:         5.8,
+		model.MetricTypeK8sDeployments:          79,
+		model.MetricTypeContainerImages:         5,
+		model.MetricTypeDeployTargets:           11,
+		model.MetricTypeCICDComplexity:          100,
+	}
+
+	// Act
+	result := scorer.ScoreWithDefaults(metrics)
+	dims := make([]DimensionReport, len(result.Dimensions))
+	byDim := map[model.Dimension]float64{}
+	for i, d := range result.Dimensions {
+		dims[i] = DimensionReport{Dimension: d.Dimension, Score: d.Score, MetricCount: d.MetricCount}
+		byDim[d.Dimension] = d.Score
+	}
+	grade := overallGrade(result.Overall, dims)
+
+	// Assert
+	if s := byDim[model.DimensionSecurity]; s >= 40 {
+		t.Errorf("security = %.1f, want < 40 (F, gated by open critical)", s)
+	}
+	if grade == "C" || grade == "B" || grade == "A" {
+		t.Errorf("overall grade = %q, want D or F (critical must cap the rollup)", grade)
+	}
+}
+
 func TestFormatShowsTrendWhenEnabled(t *testing.T) {
 	f := New()
 	f.UseColor = false

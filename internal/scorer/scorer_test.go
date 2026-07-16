@@ -266,6 +266,54 @@ func TestScoreDimensionsCode(t *testing.T) {
 	}
 }
 
+func TestScoreDimensionsCriticalVulnGatesSecurityToF(t *testing.T) {
+	// Arrange: many lesser vulns average to a passing weighted sum, but a
+	// critical is present.
+	metrics := map[model.MetricTypeName]float64{
+		model.MetricTypeSecurityVulnerabilities: 40, // asymptotic → ~64 (would be D/C)
+		model.MetricTypeSecurityCritical:        4,
+	}
+
+	// Act
+	results := ScoreDimensions(metrics)
+
+	// Assert
+	var security *DimensionResult
+	for i := range results {
+		if results[i].Dimension == model.DimensionSecurity {
+			security = &results[i]
+		}
+	}
+	if security == nil {
+		t.Fatal("security dimension not found")
+	}
+	if security.Score >= 40 {
+		t.Errorf("security score = %v, want < 40 (gated to F by open critical)", security.Score)
+	}
+}
+
+func TestScoreDimensionsNoCriticalDoesNotGate(t *testing.T) {
+	// Arrange
+	metrics := map[model.MetricTypeName]float64{
+		model.MetricTypeSecurityVulnerabilities: 40,
+		model.MetricTypeSecurityCritical:        0,
+	}
+
+	// Act
+	results := ScoreDimensions(metrics)
+
+	// Assert
+	var security *DimensionResult
+	for i := range results {
+		if results[i].Dimension == model.DimensionSecurity {
+			security = &results[i]
+		}
+	}
+	if security.Score < 40 {
+		t.Errorf("security score = %v, want ungated (>= 40) with zero criticals", security.Score)
+	}
+}
+
 // --- Overall Scoring Tests ---
 
 func TestScoreEqualWeights(t *testing.T) {
