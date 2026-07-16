@@ -78,8 +78,8 @@ func TestFormatWithOverallScore(t *testing.T) {
 	report.OverallScore = 85.0
 	out := f.Format(report)
 
-	if !strings.Contains(out, "OVERALL SCORE: 85 [B]") {
-		t.Errorf("expected 85 [B] in output, got:\n%s", out)
+	if !strings.Contains(out, "OVERALL SCORE: 85 [A]") {
+		t.Errorf("expected 85 [A] in output, got:\n%s", out)
 	}
 }
 
@@ -136,8 +136,8 @@ func TestScoringSanityGatePlatformFixture(t *testing.T) {
 	grade := overallGrade(result.Overall, dims)
 
 	// Assert
-	if result.Overall < 72 || result.Overall > 84 {
-		t.Errorf("overall = %.1f, want [72,84]", result.Overall)
+	if result.Overall < 75 || result.Overall > 87 {
+		t.Errorf("overall = %.1f, want [75,87]", result.Overall)
 	}
 	if grade != "B" {
 		t.Errorf("overall grade = %q, want B", grade)
@@ -146,10 +146,10 @@ func TestScoringSanityGatePlatformFixture(t *testing.T) {
 		dim    model.Dimension
 		lo, hi float64
 	}{
-		{model.DimensionSecurity, 78, 90},
-		{model.DimensionDelivery, 78, 86},
-		{model.DimensionInfrastructure, 80, 92},
-		{model.DimensionCode, 48, 58},
+		{model.DimensionSecurity, 90, 100},
+		{model.DimensionDelivery, 78, 90},
+		{model.DimensionInfrastructure, 85, 97},
+		{model.DimensionCode, 55, 65},
 	}
 	for _, b := range bands {
 		if s := byDim[b.dim]; s < b.lo || s > b.hi {
@@ -295,7 +295,7 @@ func TestFormatShouldIncludeScoreLegend(t *testing.T) {
 	if !strings.Contains(out, "higher is healthier") {
 		t.Error("missing score direction legend")
 	}
-	if !strings.Contains(out, "A ≥90") {
+	if !strings.Contains(out, "A ≥85") {
 		t.Errorf("missing grade band legend, output:\n%s", out)
 	}
 }
@@ -487,17 +487,14 @@ func TestScoreGrade(t *testing.T) {
 		grade string
 	}{
 		{95.0, "A"},
-		{90.0, "A"},
-		{85.0, "B"},
+		{85.0, "A"},
 		{80.0, "B"},
-		{75.0, "B"},
-		{70.0, "C"},
+		{70.0, "B"},
 		{65.0, "C"},
-		{60.0, "C"},
-		{55.0, "D"},
+		{50.0, "C"},
 		{45.0, "D"},
-		{40.0, "D"},
-		{39.0, "F"},
+		{30.0, "D"},
+		{29.0, "F"},
 		{0.0, "F"},
 	}
 	for _, tt := range tests {

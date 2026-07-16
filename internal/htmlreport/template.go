@@ -86,7 +86,7 @@ const pageTemplate = `<!DOCTYPE html>
     {{range .Repos}}{{template "report" .}}{{end}}
   {{end}}
 
-  <footer>Generated {{.Generated}} · Scores 0–100, higher is healthier · A ≥90 · B ≥75 · C ≥60 · D ≥40 · F &lt;40</footer>
+  <footer>Generated {{.Generated}} · Scores 0–100, higher is healthier · A ≥85 · B ≥70 · C ≥50 · D ≥30 · F &lt;30</footer>
 </div>
 </body>
 </html>

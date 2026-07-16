@@ -46,13 +46,13 @@ type OutputFormatter interface {
 
 func scoreGrade(score float64) string {
 	switch {
-	case score >= 90:
+	case score >= 85:
 		return "A"
-	case score >= 75:
+	case score >= 70:
 		return "B"
-	case score >= 60:
+	case score >= 50:
 		return "C"
-	case score >= 40:
+	case score >= 30:
 		return "D"
 	default:
 		return "F"
@@ -185,7 +185,7 @@ func (f *TerminalFormatter) Format(report Report) string {
 		fmt.Fprintf(&b, "   %s vs previous", formatDelta(report.OverallDelta))
 	}
 	fmt.Fprintf(&b, "\n  %s\n", rule)
-	b.WriteString("  Scores 0–100, higher is healthier   ·   A ≥90  B ≥75  C ≥60  D ≥40  F <40\n\n")
+	b.WriteString("  Scores 0–100, higher is healthier   ·   A ≥85  B ≥70  C ≥50  D ≥30  F <30\n\n")
 
 	b.WriteString("  Dimension Scores:\n")
 	if len(report.Dimensions) == 0 {
