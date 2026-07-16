@@ -13,10 +13,10 @@ type DimensionResult struct {
 }
 
 // securityCriticalCap gates the security dimension into the F band (grade
-// threshold is 40) when any open critical vulnerability exists: a critical is a
+// threshold is 30) when any open critical vulnerability exists: a critical is a
 // failing condition on its own, but its severity is diluted inside the weighted
 // security_vulnerabilities sum, so averaging alone lets criticals sit in D.
-const securityCriticalCap = 39.0
+const securityCriticalCap = 29.0
 
 func ScoreDimensions(metrics map[model.MetricTypeName]float64) []DimensionResult {
 	dimensions := []model.Dimension{

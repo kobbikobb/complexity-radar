@@ -26,8 +26,8 @@ func TestNormalizeMetricLowerIsBetter(t *testing.T) {
 	}{
 		// Asymptotic: 0 → 100, ref → 50, never floors to 0
 		{"zero security_vulns", model.MetricTypeSecurityVulnerabilities, 0, 100, 100},
-		{"low security_vulns", model.MetricTypeSecurityVulnerabilities, 0.5, 88, 93},
-		{"at ref security_vulns", model.MetricTypeSecurityVulnerabilities, 5, 48, 52},
+		{"low security_vulns", model.MetricTypeSecurityVulnerabilities, 0.5, 97, 99},
+		{"at ref security_vulns", model.MetricTypeSecurityVulnerabilities, 25, 48, 52},
 
 		{"zero stale_prs", model.MetricTypeStalePRs, 0, 100, 100},
 		{"low stale_prs", model.MetricTypeStalePRs, 5, 85, 92},
@@ -38,8 +38,8 @@ func TestNormalizeMetricLowerIsBetter(t *testing.T) {
 		{"at refMax build_time", model.MetricTypeBuildTime, 1800, 0, 5},
 
 		{"zero k8s_deployments", model.MetricTypeK8sDeployments, 0, 100, 100},
-		{"low k8s_deployments", model.MetricTypeK8sDeployments, 0.5, 88, 93},
-		{"at ref k8s_deployments", model.MetricTypeK8sDeployments, 5, 48, 52},
+		{"low k8s_deployments", model.MetricTypeK8sDeployments, 0.5, 94, 96},
+		{"at ref k8s_deployments", model.MetricTypeK8sDeployments, 10, 48, 52},
 
 		{"zero container_images", model.MetricTypeContainerImages, 0, 100, 100},
 		{"low container_images", model.MetricTypeContainerImages, 0.5, 82, 88},
@@ -48,8 +48,8 @@ func TestNormalizeMetricLowerIsBetter(t *testing.T) {
 		{"low deploy_targets", model.MetricTypeDeployTargets, 5, 75, 82},
 
 		{"zero dependency_count", model.MetricTypeDependencyCount, 0, 100, 100},
-		{"low dependency_count", model.MetricTypeDependencyCount, 5, 58, 65},
-		{"at ref dependency_count", model.MetricTypeDependencyCount, 8, 48, 52},
+		{"low dependency_count", model.MetricTypeDependencyCount, 5, 73, 78},
+		{"at ref dependency_count", model.MetricTypeDependencyCount, 15, 48, 52},
 	}
 
 	for _, tt := range tests {
@@ -270,7 +270,7 @@ func TestScoreDimensionsCriticalVulnGatesSecurityToF(t *testing.T) {
 	// Arrange: many lesser vulns average to a passing weighted sum, but a
 	// critical is present.
 	metrics := map[model.MetricTypeName]float64{
-		model.MetricTypeSecurityVulnerabilities: 40, // asymptotic → ~64 (would be D/C)
+		model.MetricTypeSecurityVulnerabilities: 50, // asymptotic(ref=25) → ~33 (would be D)
 		model.MetricTypeSecurityCritical:        4,
 	}
 
@@ -471,10 +471,10 @@ func TestScoreWithConfig(t *testing.T) {
 func TestScoreWithConfigUnequalScores(t *testing.T) {
 	// Delivery best → 100; security/infra mid, code low
 	metrics := map[model.MetricTypeName]float64{
-		model.MetricTypeSecurityVulnerabilities: 5,   // security: 50 (per-service, ref 5)
+		model.MetricTypeSecurityVulnerabilities: 25,  // security: 50 (ref 25)
 		model.MetricTypeBuildSuccessRatio:       1.0, // delivery: 100
-		model.MetricTypeK8sDeployments:          5,   // infra: 50 (per-service, ref 5)
-		model.MetricTypeDependencyCount:         500, // code: ~2 (asymptotic, never floors)
+		model.MetricTypeK8sDeployments:          10,  // infra: 50 (ref 10)
+		model.MetricTypeDependencyCount:         500, // code: ~3 (ref 15)
 	}
 	cfg := config.WeightsConfig{
 		Security:       0.25,
@@ -483,9 +483,9 @@ func TestScoreWithConfigUnequalScores(t *testing.T) {
 		Code:           0.25,
 	}
 	result := ScoreWithConfig(metrics, cfg)
-	// (50 + 100 + 50 + ~2) * 0.25 ≈ 50
-	if result.Overall < 40 || result.Overall > 55 {
-		t.Errorf("overall = %v, want between 40 and 55", result.Overall)
+	// (50 + 100 + 50 + ~3) * 0.25 ≈ 50
+	if result.Overall < 40 || result.Overall > 60 {
+		t.Errorf("overall = %v, want between 40 and 60", result.Overall)
 	}
 }
 
