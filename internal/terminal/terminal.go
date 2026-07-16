@@ -27,6 +27,7 @@ type DimensionReport struct {
 	Dimension   model.Dimension
 	Score       float64
 	Weight      float64
+	WeightSum   float64
 	MetricCount int
 	Breakdown   string
 	Delta       float64
@@ -38,6 +39,7 @@ type MetricReport struct {
 	RawValue   float64
 	Normalized float64
 	Unit       string
+	Weight     float64
 }
 
 type OutputFormatter interface {
@@ -146,7 +148,7 @@ func New() *TerminalFormatter {
 	return &TerminalFormatter{UseColor: true}
 }
 
-const boxWidth = 64
+const boxWidth = 80
 
 // Exported wrappers let alternate renderers (e.g. htmlreport) reuse the exact
 // grade bands and value formatting without duplicating the logic.
@@ -262,9 +264,9 @@ func (f *TerminalFormatter) writeMetricTable(b *strings.Builder, report Report) 
 		byDim[m.Dimension] = append(byDim[m.Dimension], m)
 	}
 
-	metWidths := []int{26, 9, 6, 10}
+	metWidths := []int{26, 9, 6, 10, 5, 7}
 	b.WriteString(tableBorder(metWidths, "┌", "┬", "┐"))
-	b.WriteString(tableRow(metWidths, "lrrl", "Metric", "Raw", "Score", "Unit"))
+	b.WriteString(tableRow(metWidths, "lrrlrr", "Metric", "Raw", "Score", "Unit", "Wt", "Impact"))
 	for _, dim := range order {
 		b.WriteString(tableBorder(metWidths, "├", "┴", "┤"))
 		b.WriteString(tableSpan(metWidths, f.groupHeader(dim, dims[dim])))
@@ -274,7 +276,16 @@ func (f *TerminalFormatter) writeMetricTable(b *strings.Builder, report Report) 
 			if isDisplayOnly(methodology[m.Name]) {
 				score = "—"
 			}
-			b.WriteString(tableRow(metWidths, "lrrl", formatMetricName(m.Name), formatRawValue(m.RawValue, m.Unit), score, formatUnit(m.Unit)))
+			weightStr := ""
+			if m.Weight > 0 && m.Weight != 1.0 {
+				weightStr = fmt.Sprintf("%.1f", m.Weight)
+			}
+			impactStr := ""
+			if !isDisplayOnly(methodology[m.Name]) && dims[dim].WeightSum > 0 {
+				impact := m.Normalized * m.Weight / dims[dim].WeightSum
+				impactStr = fmt.Sprintf("%.1f", impact)
+			}
+			b.WriteString(tableRow(metWidths, "lrrlrr", formatMetricName(m.Name), formatRawValue(m.RawValue, m.Unit), score, formatUnit(m.Unit), weightStr, impactStr))
 		}
 	}
 	b.WriteString(tableBorder(metWidths, "└", "┴", "┘"))
@@ -311,6 +322,8 @@ func (f *TerminalFormatter) colorScore(score float64) string {
 		return fmt.Sprintf("\033[32m%.0f\033[0m", score)
 	case score >= 60:
 		return fmt.Sprintf("\033[33m%.0f\033[0m", score)
+	case score >= 40:
+		return fmt.Sprintf("\033[38;5;208m%.0f\033[0m", score)
 	default:
 		return fmt.Sprintf("\033[31m%.0f\033[0m", score)
 	}

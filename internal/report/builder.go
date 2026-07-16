@@ -221,6 +221,7 @@ func buildRepoReport(projectName, projectDesc string, overallScore float64, dime
 			RawValue:   raw,
 			Normalized: normalized,
 			Unit:       mt.Unit,
+			Weight:     mt.Weight,
 		})
 	}
 
@@ -259,12 +260,22 @@ func partitionMetrics(store Store, metrics []model.Metric, typesByName map[model
 }
 
 func buildDimensionReports(dimensions []scorer.DimensionResult, cfg config.WeightsConfig) []terminal.DimensionReport {
+	weightSums := make(map[model.Dimension]float64)
+	for _, mt := range model.MetricTypes() {
+		w := mt.Weight
+		if w <= 0 {
+			w = 1.0
+		}
+		weightSums[mt.Dimension] += w
+	}
+
 	dimReports := make([]terminal.DimensionReport, len(dimensions))
 	for i, d := range dimensions {
 		dimReports[i] = terminal.DimensionReport{
 			Dimension:   d.Dimension,
 			Score:       d.Score,
 			Weight:      cfg.Weight(string(d.Dimension)) * 100,
+			WeightSum:   weightSums[d.Dimension],
 			MetricCount: d.MetricCount,
 		}
 	}
