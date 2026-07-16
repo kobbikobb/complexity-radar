@@ -3,6 +3,7 @@
 package htmlreport
 
 import (
+	"fmt"
 	"html/template"
 	"sort"
 	"strings"
@@ -55,6 +56,8 @@ type metricVM struct {
 	DisplayOnly bool
 	ScoreDef    string
 	Tooltip     string
+	Weight      string
+	Impact      string
 }
 
 var methodology = func() map[model.MetricTypeName]model.MetricType {
@@ -95,7 +98,7 @@ func titleCase(s string) string {
 	return strings.ToUpper(s[:1]) + s[1:]
 }
 
-func toMetricVM(m terminal.MetricReport) metricVM {
+func toMetricVM(m terminal.MetricReport, weightSum float64) metricVM {
 	mt := methodology[m.Name]
 	mv := metricVM{
 		Name:        terminal.MetricDisplayName(m.Name),
@@ -111,6 +114,13 @@ func toMetricVM(m terminal.MetricReport) metricVM {
 	} else {
 		mv.Score = terminal.RawValueDisplay(m.Normalized, "score")
 		mv.Band = band(m.Normalized)
+	}
+	if m.Weight > 0 && m.Weight != 1.0 {
+		mv.Weight = fmt.Sprintf("%.1f", m.Weight)
+	}
+	if !mv.DisplayOnly && weightSum > 0 {
+		impact := m.Normalized * m.Weight / weightSum
+		mv.Impact = fmt.Sprintf("%.1f", impact)
 	}
 	return mv
 }
@@ -158,7 +168,7 @@ func toReportVM(r terminal.Report) reportVM {
 		})
 		g := groupVM{Dimension: titleCase(string(d.Dimension))}
 		for _, m := range metrics {
-			g.Metrics = append(g.Metrics, toMetricVM(m))
+			g.Metrics = append(g.Metrics, toMetricVM(m, d.WeightSum))
 		}
 		vm.Groups = append(vm.Groups, g)
 	}

@@ -124,7 +124,7 @@ const pageTemplate = `<!DOCTYPE html>
   {{range .Groups}}
   <h3>{{.Dimension}}</h3>
   <table>
-    <thead><tr><th>Metric</th><th class="num">Raw</th><th>Unit</th><th class="num">Score</th></tr></thead>
+    <thead><tr><th>Metric</th><th class="num">Raw</th><th>Unit</th><th class="num">Score</th><th class="num">Wt</th><th class="num">Impact</th></tr></thead>
     <tbody>
     {{range .Metrics}}
       <tr>
@@ -135,6 +135,8 @@ const pageTemplate = `<!DOCTYPE html>
         <td class="num">{{.Raw}}</td>
         <td>{{.Unit}}</td>
         <td class="num"><span class="pill {{.Band}}">{{.Score}}</span></td>
+        <td class="num">{{if .Weight}}{{.Weight}}{{end}}</td>
+        <td class="num">{{if .Impact}}{{.Impact}}{{end}}</td>
       </tr>
     {{end}}
     </tbody>

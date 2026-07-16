@@ -391,12 +391,12 @@ func TestColorScoreYellow(t *testing.T) {
 
 func TestColorScoreRed(t *testing.T) {
 	f := New()
-	out := f.colorScore(40.0)
+	out := f.colorScore(35.0)
 	if !strings.Contains(out, "\033[31m") {
 		t.Errorf("expected red ANSI, got %q", out)
 	}
-	if !strings.Contains(out, "40") {
-		t.Errorf("expected 40, got %q", out)
+	if !strings.Contains(out, "35") {
+		t.Errorf("expected 35, got %q", out)
 	}
 }
 
@@ -590,7 +590,7 @@ func TestStripANSI(t *testing.T) {
 		{"empty", "", ""},
 		{"green", "\033[32m85.0\033[0m", "85.0"},
 		{"yellow", "\033[33m65.0\033[0m", "65.0"},
-		{"red", "\033[31m40.0\033[0m", "40.0"},
+		{"red", "\033[31m35.0\033[0m", "35.0"},
 		{"nested", "\033[32m\033[1m85.0\033[0m\033[0m", "85.0"},
 	}
 	for _, tt := range tests {
@@ -615,7 +615,9 @@ func TestColorScoreBoundaries(t *testing.T) {
 		{"75 is green", 75.0, "\033[32m"},
 		{"74.9 is yellow", 74.9, "\033[33m"},
 		{"60 is yellow", 60.0, "\033[33m"},
-		{"59.9 is red", 59.9, "\033[31m"},
+		{"59.9 is orange", 59.9, "\033[38;5;208m"},
+		{"40 is orange", 40.0, "\033[38;5;208m"},
+		{"39.9 is red", 39.9, "\033[31m"},
 		{"0 is red", 0.0, "\033[31m"},
 	}
 	for _, tt := range tests {
