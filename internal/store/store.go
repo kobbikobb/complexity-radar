@@ -120,8 +120,8 @@ func (s *Store) migrate() error {
 func (s *Store) CreateProject(p *model.Project) error {
 	now := time.Now().UTC().Format(time.RFC3339)
 	result, err := s.db.Exec(
-		"INSERT INTO projects (name, description, devcycle_project_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-		p.Name, p.Description, p.DevCycleProjectKey, now, now,
+		"INSERT INTO projects (name, description, devcycle_project_key, devcycle_client_id, devcycle_client_secret, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		p.Name, p.Description, p.DevCycleProjectKey, p.DevCycleClientID, p.DevCycleClientSecret, now, now,
 	)
 	if err != nil {
 		return fmt.Errorf("inserting project: %w", err)
@@ -142,8 +142,8 @@ func (s *Store) GetProjectByName(name string) (*model.Project, error) {
 	p := &model.Project{}
 	var createdAt, updatedAt string
 	err := s.db.QueryRow(
-		"SELECT id, name, description, devcycle_project_key, created_at, updated_at FROM projects WHERE name = ?", name,
-	).Scan(&p.ID, &p.Name, &p.Description, &p.DevCycleProjectKey, &createdAt, &updatedAt)
+		"SELECT id, name, description, devcycle_project_key, devcycle_client_id, devcycle_client_secret, created_at, updated_at FROM projects WHERE name = ?", name,
+	).Scan(&p.ID, &p.Name, &p.Description, &p.DevCycleProjectKey, &p.DevCycleClientID, &p.DevCycleClientSecret, &createdAt, &updatedAt)
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("project %q: %w", name, ErrNotFound)
 	}
@@ -166,8 +166,8 @@ func (s *Store) GetProject(id int64) (*model.Project, error) {
 	p := &model.Project{}
 	var createdAt, updatedAt string
 	err := s.db.QueryRow(
-		"SELECT id, name, description, devcycle_project_key, created_at, updated_at FROM projects WHERE id = ?", id,
-	).Scan(&p.ID, &p.Name, &p.Description, &p.DevCycleProjectKey, &createdAt, &updatedAt)
+		"SELECT id, name, description, devcycle_project_key, devcycle_client_id, devcycle_client_secret, created_at, updated_at FROM projects WHERE id = ?", id,
+	).Scan(&p.ID, &p.Name, &p.Description, &p.DevCycleProjectKey, &p.DevCycleClientID, &p.DevCycleClientSecret, &createdAt, &updatedAt)
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("project %d not found", id)
 	}
@@ -187,7 +187,7 @@ func (s *Store) GetProject(id int64) (*model.Project, error) {
 }
 
 func (s *Store) ListProjects() ([]model.Project, error) {
-	rows, err := s.db.Query("SELECT id, name, description, devcycle_project_key, created_at, updated_at FROM projects ORDER BY id")
+	rows, err := s.db.Query("SELECT id, name, description, devcycle_project_key, devcycle_client_id, devcycle_client_secret, created_at, updated_at FROM projects ORDER BY id")
 	if err != nil {
 		return nil, fmt.Errorf("querying projects: %w", err)
 	}
@@ -197,7 +197,7 @@ func (s *Store) ListProjects() ([]model.Project, error) {
 	for rows.Next() {
 		var p model.Project
 		var createdAt, updatedAt string
-		if err := rows.Scan(&p.ID, &p.Name, &p.Description, &p.DevCycleProjectKey, &createdAt, &updatedAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.Name, &p.Description, &p.DevCycleProjectKey, &p.DevCycleClientID, &p.DevCycleClientSecret, &createdAt, &updatedAt); err != nil {
 			return nil, fmt.Errorf("scanning project: %w", err)
 		}
 		p.CreatedAt, err = time.Parse(time.RFC3339, createdAt)
@@ -217,8 +217,8 @@ func (s *Store) ListProjects() ([]model.Project, error) {
 func (s *Store) UpdateProject(p *model.Project) error {
 	now := time.Now().UTC().Format(time.RFC3339)
 	result, err := s.db.Exec(
-		"UPDATE projects SET name = ?, description = ?, devcycle_project_key = ?, updated_at = ? WHERE id = ?",
-		p.Name, p.Description, p.DevCycleProjectKey, now, p.ID,
+		"UPDATE projects SET name = ?, description = ?, devcycle_project_key = ?, devcycle_client_id = ?, devcycle_client_secret = ?, updated_at = ? WHERE id = ?",
+		p.Name, p.Description, p.DevCycleProjectKey, p.DevCycleClientID, p.DevCycleClientSecret, now, p.ID,
 	)
 	if err != nil {
 		return fmt.Errorf("updating project: %w", err)

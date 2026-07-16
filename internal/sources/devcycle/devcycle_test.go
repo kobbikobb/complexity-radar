@@ -36,13 +36,14 @@ func collectDebt(t *testing.T, project model.Project, features []Feature) ([]mod
 	return metrics, stub
 }
 
-func TestCollectProject(t *testing.T) {
-	t.Setenv("DEVCYCLE_CLIENT_ID", "id")
-	t.Setenv("DEVCYCLE_CLIENT_SECRET", "secret")
+func configured(key string) model.Project {
+	return model.Project{DevCycleProjectKey: key, DevCycleClientID: "id", DevCycleClientSecret: "secret"}
+}
 
+func TestCollectProject(t *testing.T) {
 	t.Run("should count active flags flagged stale by devcycle", func(t *testing.T) {
 		// Arrange
-		project := model.Project{DevCycleProjectKey: "proj"}
+		project := configured("proj")
 		features := []Feature{
 			{Status: "active", Staleness: &Staleness{Reason: "unused"}},
 			{Status: "active", UpdatedAt: daysAgo(1)},
@@ -59,7 +60,7 @@ func TestCollectProject(t *testing.T) {
 
 	t.Run("should count active flags untouched past the fallback threshold", func(t *testing.T) {
 		// Arrange
-		project := model.Project{DevCycleProjectKey: "proj"}
+		project := configured("proj")
 		features := []Feature{
 			{Status: "active", UpdatedAt: daysAgo(45)},
 			{Status: "active", UpdatedAt: daysAgo(10)},
@@ -76,7 +77,7 @@ func TestCollectProject(t *testing.T) {
 
 	t.Run("should ignore non-active flags", func(t *testing.T) {
 		// Arrange
-		project := model.Project{DevCycleProjectKey: "proj"}
+		project := configured("proj")
 		features := []Feature{
 			{Status: "complete", Staleness: &Staleness{Reason: "unused"}},
 			{Status: "archived", UpdatedAt: daysAgo(90)},
@@ -95,9 +96,7 @@ func TestCollectProject(t *testing.T) {
 func TestCollectProjectSkipsWhenUnconfigured(t *testing.T) {
 	t.Run("should skip when project has no key", func(t *testing.T) {
 		// Arrange
-		t.Setenv("DEVCYCLE_CLIENT_ID", "id")
-		t.Setenv("DEVCYCLE_CLIENT_SECRET", "secret")
-		project := model.Project{}
+		project := model.Project{DevCycleClientID: "id", DevCycleClientSecret: "secret"}
 
 		// Act
 		metrics, stub := collectDebt(t, project, nil)
@@ -113,8 +112,6 @@ func TestCollectProjectSkipsWhenUnconfigured(t *testing.T) {
 
 	t.Run("should skip when credentials are absent", func(t *testing.T) {
 		// Arrange
-		t.Setenv("DEVCYCLE_CLIENT_ID", "")
-		t.Setenv("DEVCYCLE_CLIENT_SECRET", "")
 		project := model.Project{DevCycleProjectKey: "proj"}
 
 		// Act

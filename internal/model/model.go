@@ -149,12 +149,14 @@ func DisplayMetricTypes() []MetricType {
 }
 
 type Project struct {
-	ID                 int64
-	Name               string
-	Description        string
-	DevCycleProjectKey string
-	CreatedAt          time.Time
-	UpdatedAt          time.Time
+	ID                   int64
+	Name                 string
+	Description          string
+	DevCycleProjectKey   string
+	DevCycleClientID     string
+	DevCycleClientSecret string
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
 }
 
 type Repository struct {

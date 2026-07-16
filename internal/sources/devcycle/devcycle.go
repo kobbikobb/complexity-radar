@@ -2,7 +2,6 @@ package devcycle
 
 import (
 	"context"
-	"os"
 	"time"
 
 	"github.com/kobbikobb/complexity-radar/internal/model"
@@ -18,8 +17,8 @@ type FeatureLister interface {
 }
 
 // Source collects feature-flag debt from DevCycle. It is opt-in: unless the
-// project has a DevCycle project key and the DEVCYCLE_CLIENT_ID /
-// DEVCYCLE_CLIENT_SECRET env vars are set, CollectProject is a no-op.
+// project has a DevCycle project key, client ID, and client secret configured,
+// CollectProject is a no-op.
 type Source struct {
 	newClient func(id, secret string) FeatureLister
 }
@@ -44,12 +43,11 @@ func (s *Source) SupportedMetrics() []model.MetricTypeName {
 }
 
 func (s *Source) CollectProject(ctx context.Context, project model.Project) ([]model.SourceMetric, error) {
-	id, secret := os.Getenv("DEVCYCLE_CLIENT_ID"), os.Getenv("DEVCYCLE_CLIENT_SECRET")
-	if project.DevCycleProjectKey == "" || id == "" || secret == "" {
+	if project.DevCycleProjectKey == "" || project.DevCycleClientID == "" || project.DevCycleClientSecret == "" {
 		return nil, nil
 	}
 
-	features, err := s.newClient(id, secret).ListFeatures(ctx, project.DevCycleProjectKey)
+	features, err := s.newClient(project.DevCycleClientID, project.DevCycleClientSecret).ListFeatures(ctx, project.DevCycleProjectKey)
 	if err != nil {
 		return nil, err
 	}

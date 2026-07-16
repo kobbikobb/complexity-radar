@@ -81,12 +81,14 @@ func promptProject(reader *bufio.Reader, s *store.Store) (*model.Project, error)
 			var idx int
 			if _, err := fmt.Sscanf(choice, "%d", &idx); err == nil && idx >= 1 && idx <= len(existing) {
 				selected := &existing[idx-1]
-				key, err := promptDevCycleKey(reader, selected.DevCycleProjectKey)
+				key, clientID, clientSecret, err := promptDevCycle(reader, selected.DevCycleProjectKey, selected.DevCycleClientID, selected.DevCycleClientSecret)
 				if err != nil {
 					return nil, err
 				}
-				if key != selected.DevCycleProjectKey {
+				if key != selected.DevCycleProjectKey || clientID != selected.DevCycleClientID || clientSecret != selected.DevCycleClientSecret {
 					selected.DevCycleProjectKey = key
+					selected.DevCycleClientID = clientID
+					selected.DevCycleClientSecret = clientSecret
 					if err := s.UpdateProject(selected); err != nil {
 						return nil, fmt.Errorf("updating project: %w", err)
 					}
@@ -111,15 +113,17 @@ func promptProject(reader *bufio.Reader, s *store.Store) (*model.Project, error)
 		return nil, err
 	}
 
-	devCycleKey, err := promptDevCycleKey(reader, "")
+	devCycleKey, devCycleClientID, devCycleClientSecret, err := promptDevCycle(reader, "", "", "")
 	if err != nil {
 		return nil, err
 	}
 
 	project := &model.Project{
-		Name:               name,
-		Description:        description,
-		DevCycleProjectKey: devCycleKey,
+		Name:                 name,
+		Description:          description,
+		DevCycleProjectKey:   devCycleKey,
+		DevCycleClientID:     devCycleClientID,
+		DevCycleClientSecret: devCycleClientSecret,
 	}
 	if err := s.CreateProject(project); err != nil {
 		return nil, fmt.Errorf("creating project: %w", err)
@@ -289,23 +293,28 @@ func editRepository(reader *bufio.Reader, s *store.Store, repo *model.Repository
 	return repo, nil
 }
 
-func promptDevCycleKey(reader *bufio.Reader, current string) (string, error) {
-	track, err := promptYesNo(reader, "Track DevCycle feature-flag debt for this project?", current != "")
+func promptDevCycle(reader *bufio.Reader, key, clientID, clientSecret string) (nKey, nClientID, nClientSecret string, err error) {
+	track, err := promptYesNo(reader, "Track DevCycle feature-flag debt for this project?", key != "")
 	if err != nil {
-		return "", err
+		return "", "", "", err
 	}
 	if !track {
-		return "", nil
+		return "", "", "", nil
 	}
 
-	key, err := prompt(reader, "DevCycle project key", current)
+	key, err = prompt(reader, "DevCycle project key (from the /p/<key> URL segment)", key)
 	if err != nil {
-		return "", err
+		return "", "", "", err
 	}
-	if key != "" {
-		fmt.Println("Set DEVCYCLE_CLIENT_ID and DEVCYCLE_CLIENT_SECRET in your environment before running 'radar scan'.")
+	clientID, err = prompt(reader, "DevCycle client ID (app.devcycle.com/r/settings)", clientID)
+	if err != nil {
+		return "", "", "", err
 	}
-	return key, nil
+	clientSecret, err = prompt(reader, "DevCycle client secret", clientSecret)
+	if err != nil {
+		return "", "", "", err
+	}
+	return key, clientID, clientSecret, nil
 }
 
 func promptDeployMethod(reader *bufio.Reader, current string) (string, error) {
