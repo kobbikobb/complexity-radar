@@ -100,7 +100,7 @@ const pageTemplate = `<!DOCTYPE html>
       <p class="sub">Collected {{.Collected}}</p>
     </div>
     <div class="score-box {{.Band}}">
-      <div><span class="score-num">{{printf "%.1f" .Overall}}</span><span class="score-max"> / 100</span></div>
+      <div><span class="score-num">{{printf "%.0f" .Overall}}</span><span class="score-max"> / 100</span></div>
       <div class="grade {{.Band}}">Grade {{.Grade}}</div>
     </div>
   </div>
@@ -111,7 +111,7 @@ const pageTemplate = `<!DOCTYPE html>
     <div class="tile">
       <div class="dim">{{.Name}}<span class="badge {{.Band}}">{{.Grade}}</span></div>
       {{if .MetricCount}}
-        <div class="tscore {{.Band}}" style="background:none;padding:0">{{printf "%.1f" .Score}}</div>
+        <div class="tscore {{.Band}}" style="background:none;padding:0">{{printf "%.0f" .Score}}</div>
       {{else}}
         <div class="tscore empty" style="background:none;padding:0">—</div>
       {{end}}

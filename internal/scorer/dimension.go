@@ -70,7 +70,9 @@ func ScoreDimensions(metrics map[model.MetricTypeName]float64) []DimensionResult
 		if a.weight > 0 {
 			score = a.weighted / a.weight
 		}
-		if d == model.DimensionSecurity && a.count > 0 && metrics[model.MetricTypeSecurityCritical] >= 1 {
+		// > 0 (not >= 1): the project rollup averages the per-repo critical count,
+		// so one critical across many repos arrives as a fraction but must still gate.
+		if d == model.DimensionSecurity && a.count > 0 && metrics[model.MetricTypeSecurityCritical] > 0 {
 			score = math.Min(score, securityCriticalCap)
 		}
 		results[i] = DimensionResult{

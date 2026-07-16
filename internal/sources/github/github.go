@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"path"
 	"strings"
 
 	"github.com/kobbikobb/complexity-radar/internal/model"
@@ -74,12 +75,6 @@ func (s *Source) Collect(ctx context.Context, repo model.Repository) ([]model.So
 
 	var metrics []model.SourceMetric
 
-	m, err := s.collectSecurityVulnerabilities(ctx, owner, name)
-	if err != nil {
-		return nil, fmt.Errorf("collecting security vulnerabilities: %w", err)
-	}
-	metrics = append(metrics, m...)
-
 	// Fetch workflow runs once and reuse for both build metrics.
 	runs, err := s.fetchWorkflowRuns(ctx, owner, name, branch)
 	if err != nil {
@@ -87,7 +82,7 @@ func (s *Source) Collect(ctx context.Context, repo model.Repository) ([]model.So
 	}
 	metrics = append(metrics, buildSuccessRatio(runs), buildTime(runs))
 
-	m, err = s.collectDeployFrequency(ctx, owner, name, repo.GitopsRepoURL, repo.DeployDetection, repo.IncludePrereleases, repo.TagPrefix)
+	m, err := s.collectDeployFrequency(ctx, owner, name, repo.GitopsRepoURL, repo.DeployDetection, repo.IncludePrereleases, repo.TagPrefix)
 	if err != nil {
 		return nil, fmt.Errorf("collecting deploy frequency: %w", err)
 	}
@@ -107,6 +102,16 @@ func (s *Source) Collect(ctx context.Context, repo model.Repository) ([]model.So
 		tree = &GitTree{}
 	}
 
+	// Service count normalizes size-scaling metrics so a monorepo isn't
+	// penalized for holding many services in one repo (health over size).
+	services := countServices(tree)
+
+	m, err = s.collectSecurityVulnerabilities(ctx, owner, name, services)
+	if err != nil {
+		return nil, fmt.Errorf("collecting security vulnerabilities: %w", err)
+	}
+	metrics = append(metrics, m...)
+
 	m, err = collectDependencyCount(ctx, s.client, owner, name, branch, tree)
 	if err != nil {
 		return nil, fmt.Errorf("collecting dependency count: %w", err)
@@ -118,12 +123,32 @@ func (s *Source) Collect(ctx context.Context, repo model.Repository) ([]model.So
 	// Fetch workflow file contents once for both cicd and deploy_targets collectors.
 	workflowContents := s.fetchWorkflowContents(ctx, owner, name, branch, tree)
 
-	metrics = append(metrics, collectK8sDeployments(tree)...)
-	metrics = append(metrics, collectContainerImages(ctx, s.client, owner, name, branch, tree)...)
+	metrics = append(metrics, collectK8sDeployments(tree, services)...)
+	metrics = append(metrics, collectContainerImages(ctx, s.client, owner, name, branch, tree, services)...)
 	metrics = append(metrics, collectDeployTargets(ctx, s.client, owner, name, branch, workflowContents)...)
 	metrics = append(metrics, collectCICDComplexity(workflowContents, ctx, s.client, owner, name, branch)...)
 
 	return metrics, nil
+}
+
+// countServices counts distinct directories holding a recognized dependency
+// manifest — the repo's deployable units. Returns at least 1 so callers can
+// divide safely. Mirrors the service definition used by collectDependencyCount.
+func countServices(tree *GitTree) int {
+	dirs := map[string]bool{}
+	for _, entry := range tree.Tree {
+		if isVendored(entry.Path) {
+			continue
+		}
+		fileName := entry.Path
+		if idx := strings.LastIndex(fileName, "/"); idx >= 0 {
+			fileName = fileName[idx+1:]
+		}
+		if _, ok := matchManifest(fileName); ok {
+			dirs[path.Dir(entry.Path)] = true
+		}
+	}
+	return max(1, len(dirs))
 }
 
 func (s *Source) fetchGitTree(ctx context.Context, owner, name, branch string) (*GitTree, error) {

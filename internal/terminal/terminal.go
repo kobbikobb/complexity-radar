@@ -208,7 +208,7 @@ func (f *TerminalFormatter) Format(report Report) string {
 	}
 
 	b.WriteString("  Metric Details:\n")
-	b.WriteString("  Grouped by dimension; raw values are per-repository totals.\n")
+	b.WriteString("  Grouped by dimension; raw values are per-repository, size-scaling metrics per-service.\n")
 	f.writeMetricTable(&b, report)
 
 	if lo, hi := scoredDimensionExtremes(report.Dimensions); lo < 10 && hi > 60 {
@@ -300,17 +300,19 @@ func titleDimension(d model.Dimension) string {
 	return strings.ToUpper(s[:1]) + s[1:]
 }
 
+// colorScore renders a score as a whole number: the underlying formulas carry
+// no sub-point precision, so a decimal would imply rigor the model lacks.
 func (f *TerminalFormatter) colorScore(score float64) string {
 	if !f.UseColor {
-		return fmt.Sprintf("%.1f", score)
+		return fmt.Sprintf("%.0f", score)
 	}
 	switch {
 	case score >= 75:
-		return fmt.Sprintf("\033[32m%.1f\033[0m", score)
+		return fmt.Sprintf("\033[32m%.0f\033[0m", score)
 	case score >= 60:
-		return fmt.Sprintf("\033[33m%.1f\033[0m", score)
+		return fmt.Sprintf("\033[33m%.0f\033[0m", score)
 	default:
-		return fmt.Sprintf("\033[31m%.1f\033[0m", score)
+		return fmt.Sprintf("\033[31m%.0f\033[0m", score)
 	}
 }
 
@@ -323,7 +325,16 @@ var acronymReplacements = []struct {
 	{"prs", "PRs"},
 }
 
+// metricDisplayNames overrides the auto-formatted label where the raw metric
+// name misframes what is measured.
+var metricDisplayNames = map[model.MetricTypeName]string{
+	model.MetricTypeCICDComplexity: "CI/CD Maturity",
+}
+
 func formatMetricName(name model.MetricTypeName) string {
+	if override, ok := metricDisplayNames[name]; ok {
+		return override
+	}
 	s := strings.ReplaceAll(string(name), "_", " ")
 
 	for _, a := range acronymReplacements {

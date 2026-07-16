@@ -7,11 +7,11 @@ import (
 )
 
 var normalizers = map[model.MetricTypeName]func(float64) float64{
-	model.MetricTypeSecurityVulnerabilities: func(v float64) float64 { return asymptotic(v, 70) },
+	model.MetricTypeSecurityVulnerabilities: func(v float64) float64 { return asymptotic(v, 5) },
 	model.MetricTypeStalePRs:                func(v float64) float64 { return asymptotic(v, 45) },
 	model.MetricTypeBuildTime:               func(v float64) float64 { return clamp(100 - (v/1800)*100) },
-	model.MetricTypeK8sDeployments:          func(v float64) float64 { return asymptotic(v, 100) },
-	model.MetricTypeContainerImages:         func(v float64) float64 { return asymptotic(v, 40) },
+	model.MetricTypeK8sDeployments:          func(v float64) float64 { return asymptotic(v, 5) },
+	model.MetricTypeContainerImages:         func(v float64) float64 { return asymptotic(v, 3) },
 	model.MetricTypeDeployTargets:           func(v float64) float64 { return asymptotic(v, 20) },
 	model.MetricTypeDependencyCount:         func(v float64) float64 { return asymptotic(v, 8) },
 	model.MetricTypeDecisionDensity:         func(v float64) float64 { return asymptotic(v, 20) },

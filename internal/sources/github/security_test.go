@@ -42,7 +42,7 @@ func TestCollectSecurityVulnerabilitiesPaginates(t *testing.T) {
 		src := NewSourceWithClient(client)
 
 		// Act
-		metrics, err := src.collectSecurityVulnerabilities(context.Background(), "org", "repo")
+		metrics, err := src.collectSecurityVulnerabilities(context.Background(), "org", "repo", 1)
 		if err != nil {
 			t.Fatalf("collectSecurityVulnerabilities: %v", err)
 		}
@@ -69,7 +69,7 @@ func TestCollectSecurityVulnerabilitiesDedup(t *testing.T) {
 		src := NewSourceWithClient(client)
 
 		// Act
-		metrics, err := src.collectSecurityVulnerabilities(context.Background(), "org", "repo")
+		metrics, err := src.collectSecurityVulnerabilities(context.Background(), "org", "repo", 1)
 		if err != nil {
 			t.Fatalf("collectSecurityVulnerabilities: %v", err)
 		}
@@ -92,7 +92,7 @@ func TestCollectSecurityVulnerabilitiesDedup(t *testing.T) {
 		src := NewSourceWithClient(client)
 
 		// Act
-		metrics, err := src.collectSecurityVulnerabilities(context.Background(), "org", "repo")
+		metrics, err := src.collectSecurityVulnerabilities(context.Background(), "org", "repo", 1)
 		if err != nil {
 			t.Fatalf("collectSecurityVulnerabilities: %v", err)
 		}
@@ -111,7 +111,7 @@ func TestCollectSecurityVulnerabilitiesDedup(t *testing.T) {
 		src := NewSourceWithClient(client)
 
 		// Act
-		metrics, err := src.collectSecurityVulnerabilities(context.Background(), "org", "repo")
+		metrics, err := src.collectSecurityVulnerabilities(context.Background(), "org", "repo", 1)
 		if err != nil {
 			t.Fatalf("collectSecurityVulnerabilities: %v", err)
 		}

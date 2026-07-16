@@ -14,7 +14,7 @@ func sampleReport(name string, aggregate bool) terminal.Report {
 	return terminal.Report{
 		ProjectName:        name,
 		ProjectDescription: "A test project",
-		OverallScore:       78.5,
+		OverallScore:       78.0,
 		Aggregate:          aggregate,
 		Dimensions: []terminal.DimensionReport{
 			{Dimension: model.DimensionSecurity, Score: 82.0, Weight: 30.0, MetricCount: 1},
@@ -45,7 +45,7 @@ func TestRender(t *testing.T) {
 		if !strings.Contains(out, "my-project") {
 			t.Error("missing project name")
 		}
-		if !strings.Contains(out, "78.5") {
+		if !strings.Contains(out, "78") {
 			t.Error("missing overall score")
 		}
 		for _, dim := range []string{"Security", "Delivery", "Code"} {

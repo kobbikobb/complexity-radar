@@ -49,7 +49,7 @@ func TestFormatEmptyReport(t *testing.T) {
 	if !strings.Contains(out, "Project: empty") {
 		t.Error("missing project name")
 	}
-	if !strings.Contains(out, "OVERALL SCORE: 0.0") {
+	if !strings.Contains(out, "OVERALL SCORE: 0") {
 		t.Error("missing overall score")
 	}
 	if !strings.Contains(out, "Collected:") {
@@ -75,11 +75,11 @@ func TestFormatWithOverallScore(t *testing.T) {
 	f := New()
 	f.UseColor = false
 	report := sampleReport()
-	report.OverallScore = 85.5
+	report.OverallScore = 85.0
 	out := f.Format(report)
 
-	if !strings.Contains(out, "OVERALL SCORE: 85.5 [B]") {
-		t.Errorf("expected 85.5 [B] in output, got:\n%s", out)
+	if !strings.Contains(out, "OVERALL SCORE: 85 [B]") {
+		t.Errorf("expected 85 [B] in output, got:\n%s", out)
 	}
 }
 
@@ -105,20 +105,22 @@ func TestOverallGradeIgnoresCriticalWithoutData(t *testing.T) {
 	}
 }
 
-// TestScoringSanityGatePlatformFixture pins the real platform raw values that
-// previously floored to F and asserts the asymptotic curve keeps them at ≈ C/D.
+// TestScoringSanityGatePlatformFixture pins the real platform raw values,
+// normalized per-service (~100 services), with no open criticals. It guards two
+// things: the asymptotic curve never floors a healthy repo to F, and per-service
+// normalization stops the monorepo's size from dragging security/infra down.
 func TestScoringSanityGatePlatformFixture(t *testing.T) {
-	// Arrange
+	// Arrange: size-scaling metrics are per-service (absolute ÷ ~100 services).
 	metrics := map[model.MetricTypeName]float64{
-		model.MetricTypeSecurityVulnerabilities: 95.9,
+		model.MetricTypeSecurityVulnerabilities: 0.959,
 		model.MetricTypeStalePRs:                46,
 		model.MetricTypeBuildTime:               365.8,
 		model.MetricTypeDeployFrequency:         5,
 		model.MetricTypeBuildSuccessRatio:       1.0,
 		model.MetricTypeDecisionDensity:         18.4,
 		model.MetricTypeDependencyCount:         5.8,
-		model.MetricTypeK8sDeployments:          79,
-		model.MetricTypeContainerImages:         5,
+		model.MetricTypeK8sDeployments:          0.79,
+		model.MetricTypeContainerImages:         0.05,
 		model.MetricTypeDeployTargets:           11,
 		model.MetricTypeCICDComplexity:          100,
 	}
@@ -134,19 +136,19 @@ func TestScoringSanityGatePlatformFixture(t *testing.T) {
 	grade := overallGrade(result.Overall, dims)
 
 	// Assert
-	if result.Overall < 58 || result.Overall > 70 {
-		t.Errorf("overall = %.1f, want [58,70]", result.Overall)
+	if result.Overall < 72 || result.Overall > 84 {
+		t.Errorf("overall = %.1f, want [72,84]", result.Overall)
 	}
-	if grade != "C" {
-		t.Errorf("overall grade = %q, want C", grade)
+	if grade != "B" {
+		t.Errorf("overall grade = %q, want B", grade)
 	}
 	bands := []struct {
 		dim    model.Dimension
 		lo, hi float64
 	}{
-		{model.DimensionSecurity, 38, 48},
+		{model.DimensionSecurity, 78, 90},
 		{model.DimensionDelivery, 78, 86},
-		{model.DimensionInfrastructure, 73, 82},
+		{model.DimensionInfrastructure, 80, 92},
 		{model.DimensionCode, 48, 58},
 	}
 	for _, b := range bands {
@@ -160,9 +162,11 @@ func TestScoringSanityGatePlatformFixture(t *testing.T) {
 // the open criticals the real run carried, and asserts the critical gate drops
 // security to F and the overall grade below C.
 func TestSecurityCriticalGatesPlatformGrade(t *testing.T) {
-	// Arrange
+	// Arrange: same per-service fixture, plus the 4 open criticals the real run
+	// carried. Without the gate, per-service normalization would score security
+	// as healthy (~84); the gate must override that.
 	metrics := map[model.MetricTypeName]float64{
-		model.MetricTypeSecurityVulnerabilities: 95.9,
+		model.MetricTypeSecurityVulnerabilities: 0.959,
 		model.MetricTypeSecurityCritical:        4,
 		model.MetricTypeStalePRs:                46,
 		model.MetricTypeBuildTime:               365.8,
@@ -170,8 +174,8 @@ func TestSecurityCriticalGatesPlatformGrade(t *testing.T) {
 		model.MetricTypeBuildSuccessRatio:       1.0,
 		model.MetricTypeDecisionDensity:         18.4,
 		model.MetricTypeDependencyCount:         5.8,
-		model.MetricTypeK8sDeployments:          79,
-		model.MetricTypeContainerImages:         5,
+		model.MetricTypeK8sDeployments:          0.79,
+		model.MetricTypeContainerImages:         0.05,
 		model.MetricTypeDeployTargets:           11,
 		model.MetricTypeCICDComplexity:          100,
 	}
@@ -274,10 +278,10 @@ func TestFormatShouldGroupMetricsByDimension(t *testing.T) {
 	out := f.Format(sampleReport())
 
 	// Assert
-	if !strings.Contains(out, "Delivery   65.0 C") {
+	if !strings.Contains(out, "Delivery   65 C") {
 		t.Errorf("expected delivery group header driving its metrics, got:\n%s", out)
 	}
-	if strings.Index(out, "Deploy Frequency") < strings.Index(out, "Delivery   65.0 C") {
+	if strings.Index(out, "Deploy Frequency") < strings.Index(out, "Delivery   65 C") {
 		t.Errorf("expected delivery metrics under their group header, got:\n%s", out)
 	}
 }
@@ -369,8 +373,8 @@ func TestColorScoreGreen(t *testing.T) {
 	if !strings.Contains(out, "\033[32m") {
 		t.Errorf("expected green ANSI, got %q", out)
 	}
-	if !strings.Contains(out, "85.0") {
-		t.Errorf("expected 85.0, got %q", out)
+	if !strings.Contains(out, "85") {
+		t.Errorf("expected 85, got %q", out)
 	}
 }
 
@@ -380,8 +384,8 @@ func TestColorScoreYellow(t *testing.T) {
 	if !strings.Contains(out, "\033[33m") {
 		t.Errorf("expected yellow ANSI, got %q", out)
 	}
-	if !strings.Contains(out, "65.0") {
-		t.Errorf("expected 65.0, got %q", out)
+	if !strings.Contains(out, "65") {
+		t.Errorf("expected 65, got %q", out)
 	}
 }
 
@@ -391,8 +395,8 @@ func TestColorScoreRed(t *testing.T) {
 	if !strings.Contains(out, "\033[31m") {
 		t.Errorf("expected red ANSI, got %q", out)
 	}
-	if !strings.Contains(out, "40.0") {
-		t.Errorf("expected 40.0, got %q", out)
+	if !strings.Contains(out, "40") {
+		t.Errorf("expected 40, got %q", out)
 	}
 }
 
@@ -416,7 +420,7 @@ func TestFormatMetricName(t *testing.T) {
 		{model.MetricTypeSecurityVulnerabilities, "Security Vulnerabilities"},
 		{model.MetricTypeBuildSuccessRatio, "Build Success Ratio"},
 		{model.MetricTypeDependencyCount, "Dependency Count"},
-		{model.MetricTypeCICDComplexity, "CI/CD Complexity"},
+		{model.MetricTypeCICDComplexity, "CI/CD Maturity"},
 		{model.MetricTypeStalePRs, "Stale PRs"},
 		{model.MetricTypeK8sDeployments, "K8s Deployments"},
 	}
@@ -533,8 +537,8 @@ func TestFormatSampleReport(t *testing.T) {
 		t.Error("missing description")
 	}
 
-	// overall score with grade B (75.0)
-	if !strings.Contains(out, "OVERALL SCORE: 75.0 [B]") {
+	// overall score with grade B (75)
+	if !strings.Contains(out, "OVERALL SCORE: 75 [B]") {
 		t.Errorf("unexpected overall score line, output:\n%s", out)
 	}
 
