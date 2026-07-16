@@ -189,11 +189,6 @@ func Render(project terminal.Report, repos []terminal.Report) (string, error) {
 		Project:   toReportVM(project),
 		Generated: time.Now().UTC().Format(time.RFC3339),
 	}
-	if len(repos) > 1 {
-		for _, r := range repos {
-			data.Repos = append(data.Repos, toReportVM(r))
-		}
-	}
 
 	var b strings.Builder
 	if err := tmpl.Execute(&b, data); err != nil {
