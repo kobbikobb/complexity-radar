@@ -102,9 +102,6 @@ func runReport(cmd *cobra.Command, args []string) error {
 	formatter.ShowExplain = explain
 
 	fmt.Println(formatter.Format(projectReport))
-	for _, r := range reports {
-		fmt.Println(formatter.Format(r))
-	}
 
 	return nil
 }
