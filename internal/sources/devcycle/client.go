@@ -125,13 +125,11 @@ func (c *Client) getFeatures(ctx context.Context, endpoint string) ([]Feature, e
 		return nil, fmt.Errorf("devcycle features request failed (%s): %s", strconv.Itoa(resp.StatusCode), data)
 	}
 
-	var result struct {
-		Data []Feature `json:"data"`
-	}
-	if err := json.Unmarshal(data, &result); err != nil {
+	var features []Feature
+	if err := json.Unmarshal(data, &features); err != nil {
 		return nil, fmt.Errorf("parsing devcycle features: %w", err)
 	}
-	return result.Data, nil
+	return features, nil
 }
 
 func escapePathSegments(s string) string {
