@@ -271,21 +271,31 @@ func (f *TerminalFormatter) writeMetricTable(b *strings.Builder, report Report) 
 		b.WriteString(tableBorder(metWidths, "├", "┴", "┤"))
 		b.WriteString(tableSpan(metWidths, f.groupHeader(dim, dims[dim])))
 		b.WriteString(tableBorder(metWidths, "├", "┬", "┤"))
+		var displayOnly []MetricReport
 		for _, m := range byDim[dim] {
-			score := f.colorScore(m.Normalized)
 			if isDisplayOnly(methodology[m.Name]) {
-				score = "—"
+				displayOnly = append(displayOnly, m)
+				continue
 			}
+			score := f.colorScore(m.Normalized)
 			weightStr := ""
 			if m.Weight > 0 && m.Weight != 1.0 {
 				weightStr = fmt.Sprintf("%.1f", m.Weight)
 			}
 			impactStr := ""
-			if !isDisplayOnly(methodology[m.Name]) && dims[dim].WeightSum > 0 {
+			if dims[dim].WeightSum > 0 {
 				impact := m.Normalized * m.Weight / dims[dim].WeightSum
 				impactStr = fmt.Sprintf("%.1f", impact)
 			}
 			b.WriteString(tableRow(metWidths, "lrrlrr", formatMetricName(m.Name), formatRawValue(m.RawValue, m.Unit), score, formatUnit(m.Unit), weightStr, impactStr))
+		}
+		if len(displayOnly) > 0 {
+			b.WriteString(tableBorder(metWidths, "├", "┬", "┤"))
+			b.WriteString(tableSpan(metWidths, "Raw context (not scored)"))
+			b.WriteString(tableBorder(metWidths, "├", "┬", "┤"))
+			for _, m := range displayOnly {
+				b.WriteString(tableRow(metWidths, "lrrlrr", formatMetricName(m.Name), formatRawValue(m.RawValue, m.Unit), "—", formatUnit(m.Unit), "", ""))
+			}
 		}
 	}
 	b.WriteString(tableBorder(metWidths, "└", "┴", "┘"))

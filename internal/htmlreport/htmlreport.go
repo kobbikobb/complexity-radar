@@ -45,6 +45,7 @@ type dimVM struct {
 type groupVM struct {
 	Dimension string
 	Metrics   []metricVM
+	Details   []metricVM
 }
 
 type metricVM struct {
@@ -168,7 +169,12 @@ func toReportVM(r terminal.Report) reportVM {
 		})
 		g := groupVM{Dimension: titleCase(string(d.Dimension))}
 		for _, m := range metrics {
-			g.Metrics = append(g.Metrics, toMetricVM(m, d.WeightSum))
+			mv := toMetricVM(m, d.WeightSum)
+			if mv.DisplayOnly {
+				g.Details = append(g.Details, mv)
+			} else {
+				g.Metrics = append(g.Metrics, mv)
+			}
 		}
 		vm.Groups = append(vm.Groups, g)
 	}
