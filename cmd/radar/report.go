@@ -3,6 +3,9 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
 
 	"github.com/kobbikobb/complexity-radar/internal/htmlreport"
 	"github.com/kobbikobb/complexity-radar/internal/report"
@@ -23,7 +26,7 @@ Examples:
   radar report              # Report for all projects
   radar report --history    # Show score change since the previous collection
   radar report --explain    # Show how each metric's raw value and score are computed
-  radar report --format html --out health.html  # Write a shareable HTML report`,
+  radar report --format html  # Write a shareable HTML report to the Desktop and open it`,
 	RunE: runReport,
 }
 
@@ -33,7 +36,6 @@ func init() {
 	reportCmd.Flags().Bool("history", false, "Show score change vs the previous collection")
 	reportCmd.Flags().Bool("explain", false, "Show each metric's raw definition, scoring function, and source")
 	reportCmd.Flags().String("format", "terminal", "Output format: terminal or html")
-	reportCmd.Flags().String("out", "complexity-radar-report.html", "Output file for --format html")
 }
 
 func runReport(cmd *cobra.Command, args []string) error {
@@ -42,7 +44,6 @@ func runReport(cmd *cobra.Command, args []string) error {
 	history, _ := cmd.Flags().GetBool("history")
 	explain, _ := cmd.Flags().GetBool("explain")
 	format, _ := cmd.Flags().GetString("format")
-	outPath, _ := cmd.Flags().GetString("out")
 
 	s, err := openStore(dbPath)
 	if err != nil {
@@ -84,10 +85,14 @@ func runReport(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("rendering html: %w", err)
 		}
+		outPath := desktopReportPath()
 		if err := os.WriteFile(outPath, []byte(html), 0o644); err != nil {
 			return fmt.Errorf("writing report: %w", err)
 		}
 		fmt.Printf("HTML report written to %s\n", outPath)
+		if err := openInBrowser(outPath); err != nil {
+			fmt.Printf("Could not open it automatically: %v\n", err)
+		}
 		return nil
 	}
 
@@ -102,4 +107,30 @@ func runReport(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+// desktopReportPath returns the report path on the user's Desktop, falling back
+// to the home or working directory if the Desktop isn't available.
+func desktopReportPath() string {
+	const name = "complexity-radar-report.html"
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return name
+	}
+	desktop := filepath.Join(home, "Desktop")
+	if info, err := os.Stat(desktop); err != nil || !info.IsDir() {
+		return filepath.Join(home, name)
+	}
+	return filepath.Join(desktop, name)
+}
+
+func openInBrowser(path string) error {
+	switch runtime.GOOS {
+	case "darwin":
+		return exec.Command("open", path).Start()
+	case "windows":
+		return exec.Command("rundll32", "url.dll,FileProtocolHandler", path).Start()
+	default:
+		return exec.Command("xdg-open", path).Start()
+	}
 }
