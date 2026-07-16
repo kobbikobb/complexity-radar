@@ -148,6 +148,20 @@ func New() *TerminalFormatter {
 
 const boxWidth = 64
 
+// Exported wrappers let alternate renderers (e.g. htmlreport) reuse the exact
+// grade bands and value formatting without duplicating the logic.
+func Grade(score float64) string { return scoreGrade(score) }
+
+func OverallGrade(overall float64, dims []DimensionReport) string {
+	return overallGrade(overall, dims)
+}
+
+func MetricDisplayName(name model.MetricTypeName) string { return formatMetricName(name) }
+
+func UnitDisplay(unit string) string { return formatUnit(unit) }
+
+func RawValueDisplay(value float64, unit string) string { return formatRawValue(value, unit) }
+
 func (f *TerminalFormatter) Format(report Report) string {
 	var b strings.Builder
 	head := strings.Repeat("═", boxWidth)
