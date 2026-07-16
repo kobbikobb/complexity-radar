@@ -16,7 +16,7 @@ var imageRefPattern = regexp.MustCompile(`image:\s*["']?([a-zA-Z0-9._/-]+(?::[a-
 // Handles both tagged (nginx:1.21) and untagged (scratch) images.
 var dockerfileFromPattern = regexp.MustCompile(`^FROM\s+([a-zA-Z0-9._/-]+(?::[a-zA-Z0-9._-]+)?)`)
 
-func collectContainerImages(ctx context.Context, client APIClient, owner, name, branch string, tree *GitTree) []model.SourceMetric {
+func collectContainerImages(ctx context.Context, client APIClient, owner, name, branch string, tree *GitTree, services int) []model.SourceMetric {
 	images := make(map[string]bool)
 
 	// Check Dockerfile
@@ -25,8 +25,11 @@ func collectContainerImages(ctx context.Context, client APIClient, owner, name, 
 	// Check K8s manifests from the pre-fetched tree
 	collectImagesFromManifests(ctx, client, owner, name, branch, tree, images)
 
+	if services < 1 {
+		services = 1
+	}
 	return []model.SourceMetric{
-		{Type: model.MetricTypeContainerImages, Value: float64(len(images))},
+		{Type: model.MetricTypeContainerImages, Value: float64(len(images)) / float64(services)},
 	}
 }
 

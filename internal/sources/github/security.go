@@ -48,7 +48,7 @@ func severityWeight(sev string) float64 {
 	}
 }
 
-func (s *Source) collectSecurityVulnerabilities(ctx context.Context, owner, name string) ([]model.SourceMetric, error) {
+func (s *Source) collectSecurityVulnerabilities(ctx context.Context, owner, name string, services int) ([]model.SourceMetric, error) {
 	params := map[string]string{
 		"state":    "open",
 		"per_page": "100",
@@ -122,10 +122,16 @@ func (s *Source) collectSecurityVulnerabilities(ctx context.Context, owner, name
 		}
 	}
 
+	if services < 1 {
+		services = 1
+	}
+
 	// Severity is baked into weightedSum; the per-severity counts below are display-only
 	// (see model.DisplayMetricTypes) to avoid double-counting severity in the score.
+	// The scored sum is per-service so a monorepo isn't penalized for its size;
+	// open criticals still gate the dimension to F in the scorer regardless.
 	return []model.SourceMetric{
-		{Type: model.MetricTypeSecurityVulnerabilities, Value: weightedSum},
+		{Type: model.MetricTypeSecurityVulnerabilities, Value: weightedSum / float64(services)},
 		{Type: model.MetricTypeSecurityCritical, Value: float64(critCount)},
 		{Type: model.MetricTypeSecurityHigh, Value: float64(highCount)},
 		{Type: model.MetricTypeSecurityMedium, Value: float64(medCount)},

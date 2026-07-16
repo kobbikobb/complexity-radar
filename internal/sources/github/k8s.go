@@ -16,15 +16,18 @@ var k8sManifestPrefixes = []string{
 	"helm/",
 }
 
-func collectK8sDeployments(tree *GitTree) []model.SourceMetric {
+func collectK8sDeployments(tree *GitTree, services int) []model.SourceMetric {
 	count := 0
 	for _, entry := range tree.Tree {
 		if isK8sManifestDir(entry.Path) && isK8sManifestFile(entry.Path) {
 			count++
 		}
 	}
+	if services < 1 {
+		services = 1
+	}
 	return []model.SourceMetric{
-		{Type: model.MetricTypeK8sDeployments, Value: float64(count)},
+		{Type: model.MetricTypeK8sDeployments, Value: float64(count) / float64(services)},
 	}
 }
 

@@ -313,8 +313,8 @@ func TestEnsureAndGetMetricTypes(t *testing.T) {
 	if mt.Dimension != model.DimensionSecurity {
 		t.Errorf("dimension = %q, want %q", mt.Dimension, model.DimensionSecurity)
 	}
-	if mt.Unit != "weighted" {
-		t.Errorf("unit = %q, want %q", mt.Unit, "weighted")
+	if mt.Unit != "weighted/svc" {
+		t.Errorf("unit = %q, want %q", mt.Unit, "weighted/svc")
 	}
 
 	mt2, err := s.GetMetricTypeByName(model.MetricTypeBuildSuccessRatio)
