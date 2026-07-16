@@ -146,13 +146,14 @@ func New() *TerminalFormatter {
 	return &TerminalFormatter{UseColor: true}
 }
 
+const boxWidth = 64
+
 func (f *TerminalFormatter) Format(report Report) string {
 	var b strings.Builder
+	head := strings.Repeat("═", boxWidth)
+	rule := strings.Repeat("─", boxWidth)
 
-	b.WriteString("═══════════════════════════════════════════════════\n")
-	b.WriteString("  ComplexityRadar Report\n")
-	b.WriteString("═══════════════════════════════════════════════════\n")
-	b.WriteString("\n")
+	fmt.Fprintf(&b, "  %s\n  ComplexityRadar Report\n  %s\n\n", head, head)
 	fmt.Fprintf(&b, "  Project: %s\n", report.ProjectName)
 	if report.Aggregate {
 		b.WriteString("  (project rollup — all repositories)\n")
@@ -164,60 +165,37 @@ func (f *TerminalFormatter) Format(report Report) string {
 
 	trend := f.ShowTrend && report.HasTrend
 
-	b.WriteString("───────────────────────────────────────────────────\n")
+	fmt.Fprintf(&b, "  %s\n", rule)
 	fmt.Fprintf(&b, "  OVERALL SCORE: %s [%s]", f.colorScore(report.OverallScore), overallGrade(report.OverallScore, report.Dimensions))
 	if trend {
 		fmt.Fprintf(&b, "   %s vs previous", formatDelta(report.OverallDelta))
 	}
-	b.WriteString("\n")
-	b.WriteString("───────────────────────────────────────────────────\n")
-	b.WriteString("  Scores 0–100, higher is healthier.\n")
-	b.WriteString("  A ≥90   B ≥75   C ≥60   D ≥40   F <40\n")
-	b.WriteString("\n")
+	fmt.Fprintf(&b, "\n  %s\n", rule)
+	b.WriteString("  Scores 0–100, higher is healthier   ·   A ≥90  B ≥75  C ≥60  D ≥40  F <40\n\n")
 
 	b.WriteString("  Dimension Scores:\n")
-	dimWidths := []int{17, 7, 8, 6}
-	b.WriteString(tableBorder(dimWidths, "┌", "┬", "┐"))
-	b.WriteString(tableRow(dimWidths, "Dimension", "Score", "Weight", "Grade"))
-	b.WriteString(tableBorder(dimWidths, "├", "┼", "┤"))
-	for _, d := range report.Dimensions {
-		weight := fmt.Sprintf("%.1f%%", d.Weight)
-		row := tableRow(dimWidths, string(d.Dimension), f.colorScore(d.Score), weight, fmt.Sprintf("  %s  ", scoreGrade(d.Score)))
-		suffix := ""
-		if trend {
-			suffix += "  " + formatDelta(d.Delta)
+	if len(report.Dimensions) == 0 {
+		b.WriteString("  (no dimensions collected)\n\n")
+	} else {
+		dimWidths := []int{15, 7, 8, 5}
+		b.WriteString(tableBorder(dimWidths, "┌", "┬", "┐"))
+		b.WriteString(tableRow(dimWidths, "lrrc", "Dimension", "Score", "Weight", "Grade"))
+		b.WriteString(tableBorder(dimWidths, "├", "┼", "┤"))
+		for _, d := range report.Dimensions {
+			weight := fmt.Sprintf("%.1f%%", d.Weight)
+			row := tableRow(dimWidths, "lrrc", string(d.Dimension), f.colorScore(d.Score), weight, scoreGrade(d.Score))
+			if trend {
+				row = strings.TrimRight(row, "\n") + "   " + formatDelta(d.Delta) + "\n"
+			}
+			b.WriteString(row)
 		}
-		if d.Breakdown != "" {
-			suffix += "  — " + d.Breakdown
-		}
-		if suffix != "" {
-			row = strings.TrimRight(row, "\n") + suffix + "\n"
-		}
-		b.WriteString(row)
+		b.WriteString(tableBorder(dimWidths, "└", "┴", "┘"))
+		b.WriteString("\n")
 	}
-	b.WriteString(tableBorder(dimWidths, "└", "┴", "┘"))
-	b.WriteString("\n")
 
 	b.WriteString("  Metric Details:\n")
-	b.WriteString("  Raw values are per-repository totals.\n")
-	metWidths := []int{25, 11, 7, 7}
-	b.WriteString(tableBorder(metWidths, "┌", "┬", "┐"))
-	b.WriteString(tableRow(metWidths, "Metric", "Raw", "Score", "Unit"))
-	b.WriteString(tableBorder(metWidths, "├", "┼", "┤"))
-	for _, m := range report.Metrics {
-		name := formatMetricName(m.Name)
-		raw := formatRawValue(m.RawValue, m.Unit)
-		unit := formatUnit(m.Unit)
-		mt := methodology[m.Name]
-		score := f.colorScore(m.Normalized)
-		if isDisplayOnly(mt) {
-			score = "—"
-		}
-		row := strings.TrimRight(tableRow(metWidths, name, raw, score, unit), "\n")
-		b.WriteString(row + "  " + mt.ScoreDef + "\n")
-	}
-	b.WriteString(tableBorder(metWidths, "└", "┴", "┘"))
-	b.WriteString("\n")
+	b.WriteString("  Grouped by dimension; raw values are per-repository totals.\n")
+	f.writeMetricTable(&b, report)
 
 	if lo, hi := scoredDimensionExtremes(report.Dimensions); lo < 10 && hi > 60 {
 		fmt.Fprintf(&b, "  ⚠ Suspicious score spread: one dimension scored <10 while another >60 — likely a scoring-curve bug.\n\n")
@@ -244,9 +222,68 @@ func (f *TerminalFormatter) Format(report Report) string {
 	}
 
 	fmt.Fprintf(&b, "  Collected: %s\n", report.CollectedAt.UTC().Format(time.RFC3339))
-	b.WriteString("═══════════════════════════════════════════════════\n")
+	fmt.Fprintf(&b, "  %s\n", head)
 
 	return b.String()
+}
+
+// writeMetricTable renders metrics grouped under a per-dimension header row so a
+// reader can see which metrics drive each dimension score.
+func (f *TerminalFormatter) writeMetricTable(b *strings.Builder, report Report) {
+	if len(report.Metrics) == 0 {
+		b.WriteString("  (no metrics collected)\n\n")
+		return
+	}
+
+	dims := map[model.Dimension]DimensionReport{}
+	for _, d := range report.Dimensions {
+		dims[d.Dimension] = d
+	}
+	byDim := map[model.Dimension][]MetricReport{}
+	var order []model.Dimension
+	for _, m := range report.Metrics {
+		if _, seen := byDim[m.Dimension]; !seen {
+			order = append(order, m.Dimension)
+		}
+		byDim[m.Dimension] = append(byDim[m.Dimension], m)
+	}
+
+	metWidths := []int{26, 9, 6, 10}
+	b.WriteString(tableBorder(metWidths, "┌", "┬", "┐"))
+	b.WriteString(tableRow(metWidths, "lrrl", "Metric", "Raw", "Score", "Unit"))
+	for _, dim := range order {
+		b.WriteString(tableBorder(metWidths, "├", "┴", "┤"))
+		b.WriteString(tableSpan(metWidths, f.groupHeader(dim, dims[dim])))
+		b.WriteString(tableBorder(metWidths, "├", "┬", "┤"))
+		for _, m := range byDim[dim] {
+			score := f.colorScore(m.Normalized)
+			if isDisplayOnly(methodology[m.Name]) {
+				score = "—"
+			}
+			b.WriteString(tableRow(metWidths, "lrrl", formatMetricName(m.Name), formatRawValue(m.RawValue, m.Unit), score, formatUnit(m.Unit)))
+		}
+	}
+	b.WriteString(tableBorder(metWidths, "└", "┴", "┘"))
+	b.WriteString("\n")
+}
+
+func (f *TerminalFormatter) groupHeader(dim model.Dimension, d DimensionReport) string {
+	h := titleDimension(dim)
+	if d.MetricCount > 0 {
+		h += fmt.Sprintf("   %s %s", f.colorScore(d.Score), scoreGrade(d.Score))
+	}
+	if d.Breakdown != "" {
+		h += "   " + d.Breakdown
+	}
+	return h
+}
+
+func titleDimension(d model.Dimension) string {
+	s := string(d)
+	if s == "" {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
 }
 
 func (f *TerminalFormatter) colorScore(score float64) string {
@@ -331,7 +368,8 @@ func formatRawValue(value float64, unit string) string {
 	}
 }
 
-func tableRow(widths []int, cols ...string) string {
+// tableRow renders one row; aligns has one of l/r/c per column ('c' if missing).
+func tableRow(widths []int, aligns string, cols ...string) string {
 	var b strings.Builder
 	b.WriteString("  │")
 	for i, col := range cols {
@@ -348,13 +386,33 @@ func tableRow(widths []int, cols ...string) string {
 		if padding < 0 {
 			padding = 0
 		}
-		leftPad := padding / 2
-		rightPad := padding - leftPad
+		leftPad, rightPad := padding/2, padding-padding/2
+		if i < len(aligns) {
+			switch aligns[i] {
+			case 'l':
+				leftPad, rightPad = 0, padding
+			case 'r':
+				leftPad, rightPad = padding, 0
+			}
+		}
 		fmt.Fprintf(&b, "%s%s%s", strings.Repeat(" ", leftPad+1), col, strings.Repeat(" ", rightPad+1))
 		b.WriteString("│")
 	}
 	b.WriteString("\n")
 	return b.String()
+}
+
+// tableSpan renders a single full-width cell, used for group header rows.
+func tableSpan(widths []int, content string) string {
+	inner := len(widths) - 1
+	for _, w := range widths {
+		inner += w + 2
+	}
+	pad := inner - 1 - len(stripANSI(content))
+	if pad < 0 {
+		pad = 0
+	}
+	return "  │ " + content + strings.Repeat(" ", pad) + "│\n"
 }
 
 func tableBorder(widths []int, left, mid, right string) string {
