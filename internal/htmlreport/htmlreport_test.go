@@ -90,7 +90,7 @@ func TestRender(t *testing.T) {
 		}
 	})
 
-	t.Run("should render per-repository sections", func(t *testing.T) {
+	t.Run("should not render per-repository sections", func(t *testing.T) {
 		// Arrange
 		project := sampleReport("my-project", true)
 		repos := []terminal.Report{sampleReport("repo-a", false), sampleReport("repo-b", false)}
@@ -99,11 +99,11 @@ func TestRender(t *testing.T) {
 		out, _ := Render(project, repos)
 
 		// Assert
-		if !strings.Contains(out, "repo-a") || !strings.Contains(out, "repo-b") {
-			t.Error("missing per-repository sections")
+		if strings.Contains(out, "repo-a") || strings.Contains(out, "repo-b") {
+			t.Error("per-repository sections should not be rendered")
 		}
-		if !strings.Contains(out, "Per-repository detail") {
-			t.Error("missing per-repository heading")
+		if strings.Contains(out, "Per-repository detail") {
+			t.Error("per-repository heading should not be rendered")
 		}
 	})
 
