@@ -68,6 +68,28 @@ infrastructure = 0.25
 code = 0.20
 ```
 
+## Development
+
+```bash
+# Build the binary
+make build
+
+# Run with current source (recompiles each time)
+make run devcycle-check
+
+# Run tests
+make test
+
+# Run linter
+make lint
+
+# Format code
+make fmt
+
+# Install binary to ~/go/bin
+make install
+```
+
 ## Design Principles
 
 - **GitHub-first** — measure what you can pull from GitHub (APIs, files, manifests)
