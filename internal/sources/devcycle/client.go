@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 )
 
 const (
@@ -90,8 +91,9 @@ func (c *Client) ListFeatures(ctx context.Context, projectKey string) ([]Feature
 
 	var all []Feature
 	for page := 1; ; page++ {
+		escaped := escapePathSegments(projectKey)
 		endpoint := fmt.Sprintf("%s/projects/%s/features?perPage=%d&page=%d",
-			apiBase, url.PathEscape(projectKey), perPage, page)
+			apiBase, escaped, perPage, page)
 		batch, err := c.getFeatures(ctx, endpoint)
 		if err != nil {
 			return nil, err
@@ -123,9 +125,19 @@ func (c *Client) getFeatures(ctx context.Context, endpoint string) ([]Feature, e
 		return nil, fmt.Errorf("devcycle features request failed (%s): %s", strconv.Itoa(resp.StatusCode), data)
 	}
 
-	var features []Feature
-	if err := json.Unmarshal(data, &features); err != nil {
+	var result struct {
+		Data []Feature `json:"data"`
+	}
+	if err := json.Unmarshal(data, &result); err != nil {
 		return nil, fmt.Errorf("parsing devcycle features: %w", err)
 	}
-	return features, nil
+	return result.Data, nil
+}
+
+func escapePathSegments(s string) string {
+	parts := strings.Split(s, "/")
+	for i, p := range parts {
+		parts[i] = url.PathEscape(p)
+	}
+	return strings.Join(parts, "/")
 }
