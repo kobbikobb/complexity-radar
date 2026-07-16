@@ -215,14 +215,31 @@ func TestFormatShouldHideMethodologyWhenExplainDisabled(t *testing.T) {
 	}
 }
 
-func TestFormatShouldShowScoreDefInlineByDefault(t *testing.T) {
+func TestFormatShouldKeepMetricRowsNarrowByDefault(t *testing.T) {
 	f := New()
 	f.UseColor = false
 
 	out := f.Format(sampleReport())
 
-	if !strings.Contains(out, methodology[model.MetricTypeBuildTime].ScoreDef) {
-		t.Errorf("expected scoring definition inline in default report, got:\n%s", out)
+	if strings.Contains(out, methodology[model.MetricTypeBuildTime].ScoreDef) {
+		t.Errorf("scoring definition should stay out of narrow rows without --explain, got:\n%s", out)
+	}
+}
+
+func TestFormatShouldGroupMetricsByDimension(t *testing.T) {
+	// Arrange
+	f := New()
+	f.UseColor = false
+
+	// Act
+	out := f.Format(sampleReport())
+
+	// Assert
+	if !strings.Contains(out, "Delivery   65.0 C") {
+		t.Errorf("expected delivery group header driving its metrics, got:\n%s", out)
+	}
+	if strings.Index(out, "Deploy Frequency") < strings.Index(out, "Delivery   65.0 C") {
+		t.Errorf("expected delivery metrics under their group header, got:\n%s", out)
 	}
 }
 
